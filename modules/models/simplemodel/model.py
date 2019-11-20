@@ -23,7 +23,3 @@ class SimpleRNN(nn.Module):
         x = self.linear(x)
 
         return x, lengths, hiddens
-
-#     def init_hidden(self, batch_size):
-#         hidden = torch.zeros(self.n_layers*2, batch_size, self.hidden_dim)
-#         return hidden
