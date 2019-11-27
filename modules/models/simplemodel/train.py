@@ -13,13 +13,21 @@ from modules.embedding import get_embeddings
 from modules.embedding import get_angles
 from modules.metrics.metric import angle_metrics
 
-path_to_model = '/antibody-shape-refinement/data/embedding/pretrained_models/ssa_L1_100d_lstm3x512_lm_i512_mb64_tau0.5_lambda0.1_p0.05_epoch100.sav'
-path_to_seq = '/antibody-shape-refinement/data/antibodies/cdr_h3_seq'
-path_to_angles = '/antibody-shape-refinement/data/antibodies/cdr_h3_angles'
+PROJECT_NAME = "antibodies-structure-prediction"
 
-num_workers = 10
-n_layers = 1
-batch_size = 500
+PATH_TO_PRETRAINED_EMBEDDING_MODEL = '/antibody-shape-refinement/data/embedding/pretrained_models' \
+                                     '/ssa_L1_100d_lstm3x512_lm_i512_mb64_tau0.5_lambda0.1_p0.05_epoch100.sav '
+PATH_TO_SEQ_DATA = '/antibody-shape-refinement/data/antibodies/cdr_h3_seq'
+PATH_TO_ANGLES_DATA = '/antibody-shape-refinement/data/antibodies/cdr_h3_angles'
+
+LEARNING_RATE = 0.001
+NUM_EPOCHS = 1000
+NUM_WORKERS = 10
+N_LAYERS = 1
+BATCH_SIZE = 500
+MODEL_INPUT_SIZE = 100
+MODEL_OUTPUT_SIZE = 4
+MODEL_HIDDEN_DIM = 20
 
 
 def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test):
@@ -70,6 +78,7 @@ def get_dataloaders(train_dataset, test_dataset, batch_size):
 def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_epochs, logger, device):
     for epoch in range(num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
+        # TODO epoch logging
         # all_preds = []
         # all_lengths = []
         # all_targets = []
@@ -165,27 +174,28 @@ def get_logger():
 def main(logger):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    seq = get_embeddings(path_to_model, path_to_seq)
-    angles = get_angles(path_to_angles)
+    if not torch.cuda.is_available():
+        logger.error("Cuda is unavailable")
+
+    seq = get_embeddings(PATH_TO_PRETRAINED_EMBEDDING_MODEL, PATH_TO_SEQ_DATA)
+    angles = get_angles(PATH_TO_ANGLES_DATA)
 
     train_data, test_data = get_dataset(seq, angles)
-    train_dataloader, val_dataloader = get_dataloaders(train_data, test_data, batch_size)
+    train_dataloader, val_dataloader = get_dataloaders(train_data, test_data, BATCH_SIZE)
 
-    wandb.init(project="antibodies-structure-prediction",
-               name=f"basic-model n_layers={n_layers} batch_size={batch_size}")
+    model = SimpleRNN(MODEL_INPUT_SIZE, MODEL_OUTPUT_SIZE, MODEL_HIDDEN_DIM, N_LAYERS)
+    model.to(device)
 
-    my_rnn = SimpleRNN(100, 4, 20, n_layers)
-    my_rnn.to(device)
-    wandb.watch(my_rnn)
+    wandb.init(project=PROJECT_NAME,
+               name=f"basic-model n_layers={N_LAYERS} batch_size={BATCH_SIZE}")
+    wandb.watch(model)
 
-    lr = 0.001
-    num_epochs = 1000
     loss = nn.MSELoss()
-    optimizer = torch.optim.Adam(my_rnn.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    train_model(train_dataloader, val_dataloader, my_rnn, loss, optimizer, num_epochs, logger, device)
+    train_model(train_dataloader, val_dataloader, model, loss, optimizer, NUM_EPOCHS, logger, device)
 
-    torch.save(my_rnn.state_dict(), os.path.join(wandb.run.dir, 'my_rnn.pt'))
+    torch.save(model.state_dict(), os.path.join(wandb.run.dir, 'model.pt'))
 
 
 if __name__ == '__main__':
