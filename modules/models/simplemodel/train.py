@@ -18,11 +18,11 @@ path_to_seq = '/antibody-shape-refinement/data/antibodies/cdr_h3_seq'
 path_to_angles = '/antibody-shape-refinement/data/antibodies/cdr_h3_angles'
 
 num_workers = 10
-n_layers = 2
+n_layers = 1
 batch_size = 500
 
 
-def padd_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test):
+def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test):
     X_train_padded = rnn_utils.pad_sequence(X_train, batch_first=True)
     y_train_padded = rnn_utils.pad_sequence(y_train, batch_first=True)
     train_dataset = [[X_train_padded[i], y_train_padded[i], lengths_train[i]] for i in range(len(X_train_padded))]
@@ -41,23 +41,18 @@ def get_dataset(seq, angles):
 
     full_data.sort(key=lambda x: x[0], reverse=True)
     # TODO log
-    # print(len(test_data), len(train_data))
 
     train_data.sort(key=lambda x: x[0], reverse=True)
     lengths_train = [train_data[i][0] for i in range(len(train_data))]
     X_train = [train_data[i][1] for i in range(len(train_data))]
     y_train = [train_data[i][2] for i in range(len(train_data))]
 
-    # print(lengths_train[0], X_train[0].shape, y_train[0].shape)
-
     test_data.sort(key=lambda x: x[0], reverse=True)
     lengths_test = [test_data[i][0] for i in range(len(test_data))]
     X_test = [test_data[i][1] for i in range(len(test_data))]
     y_test = [test_data[i][2] for i in range(len(test_data))]
 
-    # print(lengths_test, X_test[0].shape, y_test[0].shape)
-
-    train_dataset, test_dataset = padd_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test)
+    train_dataset, test_dataset = pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test)
 
     return train_dataset, test_dataset
 
@@ -75,19 +70,20 @@ def get_dataloaders(train_dataset, test_dataset, batch_size):
 def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_epochs, logger, device):
     for epoch in range(num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
+        # all_preds = []
+        # all_lengths = []
+        # all_targets = []
 
-        # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
             if phase == 'train':
                 dataloader = train_dataloader
-                model.train()  # Set model to training mode
+                model.train()
             else:
                 dataloader = val_dataloader
-                model.eval()  # Set model to evaluate mode
+                model.eval()
 
             running_loss = 0.
 
-            # Iterate over data.
             for inputs, targets, lengths in tqdm(dataloader):
                 inputs = inputs.to(device)
 
@@ -108,6 +104,27 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         loss_value.backward()
                         optimizer.step()
 
+                    else:
+                        # all_preds.append(preds)
+                        # all_targets.append(targets)
+                        # all_lengths.append(lengths)
+
+                        threshold = 0.1
+                        mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets,
+                                                                                               lengths,
+                                                                                               threshold=threshold)
+                        wandb.log({"Phi MAE batch": mean_var_phi})
+                        wandb.log({"Psi MAE batch": mean_var_psi})
+                        wandb.log({f"Accuracy phi (threshold = {threshold}) batch": accuracy_phi})
+                        wandb.log({f"Accuracy psi (threshold = {threshold}) batch": accuracy_psi})
+                        threshold = 0.5
+                        mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets, lengths,
+                                                                                               threshold=threshold)
+                        wandb.log({f"Accuracy phi (threshold = {threshold}) batch": accuracy_phi})
+                        wandb.log({f"Accuracy psi (threshold = {threshold}) batch": accuracy_psi})
+
+
+
                 # statistics
                 running_loss += loss_value.item()
 
@@ -115,21 +132,21 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
 
             logger.info(f'{phase} Loss: {epoch_loss}')
             if phase == 'train':
-                wandb.log({"train loss": epoch_loss})
+                wandb.log({"Train loss": epoch_loss})
             else:
-                threshold = 0.1
-                mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets, lengths,
-                                                                                       threshold=threshold)
-                wandb.log({"test loss": epoch_loss})
-                wandb.log({"Mean phi absolute error": mean_var_phi})
-                wandb.log({"Mean psi absolute error": mean_var_psi})
-                wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
-                wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
-                threshold = 0.5
-                mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets, lengths,
-                                                                                       threshold=threshold)
-                wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
-                wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
+                wandb.log({"Test loss": epoch_loss})
+                # threshold = 0.1
+                # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets,
+                #                                                                        all_lengths, threshold=threshold)
+                # wandb.log({"Mean phi absolute error": mean_var_phi})
+                # wandb.log({"Mean psi absolute error": mean_var_psi})
+                # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
+                # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
+                # threshold = 0.5
+                # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets, all_lengths,
+                #                                                                        threshold=threshold)
+                # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
+                # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
 
     return model
 
