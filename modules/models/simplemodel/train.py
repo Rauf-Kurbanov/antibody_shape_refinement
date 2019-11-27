@@ -123,8 +123,6 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         wandb.log({f"Accuracy phi (threshold = {threshold}) batch": accuracy_phi})
                         wandb.log({f"Accuracy psi (threshold = {threshold}) batch": accuracy_psi})
 
-
-
                 # statistics
                 running_loss += loss_value.item()
 
@@ -161,17 +159,10 @@ def get_logger():
     fileHandler.setFormatter(formatter)
     logger.addHandler(fileHandler)
 
-    # 'application' code
-    logger.debug('debug message')
-    logger.info('info message')
-    logger.warning('warn message')
-    logger.error('error message')
-    logger.critical('critical message')
-
     return logger
 
 
-def main():
+def main(logger):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     seq = get_embeddings(path_to_model, path_to_seq)
@@ -180,7 +171,6 @@ def main():
     train_data, test_data = get_dataset(seq, angles)
     train_dataloader, val_dataloader = get_dataloaders(train_data, test_data, batch_size)
 
-    logger = get_logger()
     wandb.init(project="antibodies-structure-prediction",
                name=f"basic-model n_layers={n_layers} batch_size={batch_size}")
 
@@ -199,4 +189,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main_logger = get_logger()
+    try:
+        main(main_logger)
+    except Exception as e:
+        main_logger.error(e)
