@@ -1,27 +1,19 @@
 import os
-import logging
-import wandb
+import pickle
+
 import torch
 import torch.nn as nn
 import torch.nn.utils.rnn as rnn_utils
-
+import wandb
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from modules.models.simplemodel.model import SimpleRNN
-from modules.embedding import get_embeddings
-from modules.embedding import get_angles
-from modules.metrics.metric import angle_metrics
-
-PROJECT_NAME = "antibodies-structure-prediction"
-
-PATH_TO_PRETRAINED_EMBEDDING_MODEL = '/antibody-shape-refinement/data/embedding/pretrained_models' \
-                                     '/ssa_L1_100d_lstm3x512_lm_i512_mb64_tau0.5_lambda0.1_p0.05_epoch100.sav '
-PATH_TO_SEQ_DATA = '/antibody-shape-refinement/data/antibodies/cdr_h3_seq'
-PATH_TO_ANGLES_DATA = '/antibody-shape-refinement/data/antibodies/cdr_h3_angles'
+from config_loader import load_config
+from metrics.metric import angle_metrics
+from models.simplemodel.model import SimpleRNN
 
 LEARNING_RATE = 0.001
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 100000
 NUM_WORKERS = 10
 N_LAYERS = 1
 BATCH_SIZE = 500
@@ -158,27 +150,25 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
     return model
 
 
-def get_logger():
-    logger = logging.getLogger('Basic model train')
-    logger.setLevel(logging.DEBUG)
-
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    fileHandler = logging.FileHandler("rnn2.log")
-    fileHandler.setFormatter(formatter)
-    logger.addHandler(fileHandler)
-
-    return logger
+def get_embedded_data(config):
+    seq = {}
+    angles = {}
+    with open(config["PATH_TO_SEQ_EMBEDDED"], 'rb') as handle:
+        seq = pickle.load(handle)
+    with open(config["PATH_TO_ANGLES_EMBEDDED"], 'rb') as handle:
+        angles = pickle.load(handle)
+    return seq, angles
 
 
-def main(logger):
+def simplemodel_train(logger):
+    config = load_config()
+
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     if not torch.cuda.is_available():
         logger.error("Cuda is unavailable")
 
-    seq = get_embeddings(PATH_TO_PRETRAINED_EMBEDDING_MODEL, PATH_TO_SEQ_DATA)
-    angles = get_angles(PATH_TO_ANGLES_DATA)
+    seq, angles = get_embedded_data(config)
 
     train_data, test_data = get_dataset(seq, angles)
     train_dataloader, val_dataloader = get_dataloaders(train_data, test_data, BATCH_SIZE)
@@ -186,7 +176,7 @@ def main(logger):
     model = SimpleRNN(MODEL_INPUT_SIZE, MODEL_OUTPUT_SIZE, MODEL_HIDDEN_DIM, N_LAYERS)
     model.to(device)
 
-    wandb.init(project=PROJECT_NAME,
+    wandb.init(project=config["PROJECT_NAME"],
                name=f"basic-model n_layers={N_LAYERS} batch_size={BATCH_SIZE}")
     wandb.watch(model)
 
@@ -196,11 +186,3 @@ def main(logger):
     train_model(train_dataloader, val_dataloader, model, loss, optimizer, NUM_EPOCHS, logger, device)
 
     torch.save(model.state_dict(), os.path.join(wandb.run.dir, 'model.pt'))
-
-
-if __name__ == '__main__':
-    main_logger = get_logger()
-    try:
-        main(main_logger)
-    except Exception as e:
-        main_logger.error(e)

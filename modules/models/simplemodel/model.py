@@ -13,7 +13,7 @@ class SimpleRNN(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_dim, n_layers, batch_first=True,
                             bidirectional=True)
 
-        self.linear = nn.Linear(2*hidden_dim, output_size)
+        self.linear = nn.Linear(2 * hidden_dim, output_size)
 
     def forward(self, x, lengths, hiddens=None):
         x = rnn_utils.pack_padded_sequence(x, lengths, batch_first=True)

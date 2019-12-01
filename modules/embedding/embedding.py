@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from modules.embedding.src.models.alphabets import Uniprot21
+from src.models.alphabets import Uniprot21
 
 
 def load_data(path_to_data):
@@ -112,7 +112,4 @@ def get_angles(path_to_data='antibodies_data/test_angles', device=-1):
             else:
                 head = True
                 dataset_angles[name] = torch.FloatTensor(dataset_angles[name])
-
     return dataset_angles
-
-
