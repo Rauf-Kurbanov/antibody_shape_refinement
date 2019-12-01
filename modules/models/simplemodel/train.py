@@ -1,4 +1,5 @@
 import os
+import os.path
 import pickle
 
 import torch
@@ -67,8 +68,9 @@ def get_dataloaders(train_dataset, test_dataset, batch_size):
     return train_dataloader, val_dataloader
 
 
-def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_epochs, logger, device):
-    for epoch in range(num_epochs):
+def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_epochs, logger, device, config,
+                model_backup_path=None, start_epoch=0, num_epoch_before_backup=100):
+    for epoch in range(start_epoch, num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
         # TODO epoch logging
         # all_preds = []
@@ -134,18 +136,23 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                 wandb.log({"Train loss": epoch_loss})
             else:
                 wandb.log({"Test loss": epoch_loss})
-                # threshold = 0.1
-                # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets,
-                #                                                                        all_lengths, threshold=threshold)
-                # wandb.log({"Mean phi absolute error": mean_var_phi})
-                # wandb.log({"Mean psi absolute error": mean_var_psi})
-                # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
-                # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
-                # threshold = 0.5
-                # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets, all_lengths,
-                #                                                                        threshold=threshold)
-                # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
-                # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
+
+            # threshold = 0.1
+            # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets,
+            #                                                                        all_lengths, threshold=threshold)
+            # wandb.log({"Mean phi absolute error": mean_var_phi})
+            # wandb.log({"Mean psi absolute error": mean_var_psi})
+            # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
+            # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
+            # threshold = 0.5
+            # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets, all_lengths,
+            #                                                                        threshold=threshold)
+            # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
+            # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
+
+        if epoch % num_epoch_before_backup == 0 and model_backup_path:
+            torch.save(model.state_dict(), model_backup_path)
+            write_training_epoch(config, epoch)
 
     return model
 
@@ -158,6 +165,27 @@ def get_embedded_data(config):
     with open(config["PATH_TO_ANGLES_EMBEDDED"], 'rb') as handle:
         angles = pickle.load(handle)
     return seq, angles
+
+
+def write_training_epoch(config, epoch):
+    with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"], 'w') as f:
+        f.write(f"{epoch}")
+
+
+def check_training_epoch(config):
+    if not os.path.isfile(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"]):
+        return 0
+    with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"], 'r') as f:
+        epoch = int(f.read())
+        return epoch
+
+
+def try_load_unfinished_model(logger, config):
+    try:
+        state = torch.load(config["PATH_TO_SIMPLEMODEL_BACKUP"])
+        return state
+    except:
+        logger.exception('Error loading unfinished simplemodel')
 
 
 def simplemodel_train(logger):
@@ -174,6 +202,13 @@ def simplemodel_train(logger):
     train_dataloader, val_dataloader = get_dataloaders(train_data, test_data, BATCH_SIZE)
 
     model = SimpleRNN(MODEL_INPUT_SIZE, MODEL_OUTPUT_SIZE, MODEL_HIDDEN_DIM, N_LAYERS)
+    start_epoch = check_training_epoch(config)
+    logger.info(f'Starting training from epoch {start_epoch}')
+    if start_epoch > 0:
+        state = try_load_unfinished_model(logger, config)
+        if state:
+            logger.info(f'Successfully loaded backup model')
+            model.load_state_dict(state)
     model.to(device)
 
     wandb.init(project=config["PROJECT_NAME"],
@@ -183,6 +218,8 @@ def simplemodel_train(logger):
     loss = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    train_model(train_dataloader, val_dataloader, model, loss, optimizer, NUM_EPOCHS, logger, device)
-
+    train_model(train_dataloader, val_dataloader, model, loss, optimizer, NUM_EPOCHS, logger, device, config,
+                start_epoch=start_epoch, model_backup_path=config["PATH_TO_SIMPLEMODEL_BACKUP"],
+                num_epoch_before_backup=config["NUM_EPOCH_BEFORE_BACKUP"])
+    write_training_epoch(config, 0)
     torch.save(model.state_dict(), os.path.join(wandb.run.dir, 'model.pt'))
