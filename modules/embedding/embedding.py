@@ -95,7 +95,7 @@ def get_embeddings(path_to_model, path_to_data='antibodies_data/test_seq', devic
     return dict
 
 
-def get_angles(path_to_data='antibodies_data/test_angles', device=-1):
+def get_angles(path_to_data):
     dataset_angles = {}
     with open(path_to_data, 'rb') as f:
         head = True
@@ -113,3 +113,24 @@ def get_angles(path_to_data='antibodies_data/test_angles', device=-1):
                 head = True
                 dataset_angles[name] = torch.FloatTensor(dataset_angles[name])
     return dataset_angles
+
+
+def get_coordinates(path_to_data):
+    dataset_coord = {}
+    with open(path_to_data, 'r') as f:
+        line = f.readline()
+        while line:
+            name, l = line.split()
+            dataset_coord[name] = []
+            aa_coord = []
+            for i in range(int(l)):
+                for x in map(float, f.readline().split()):
+                    aa_coord.append(x)
+                if i % 3 == 2:
+                    dataset_coord[name].append(aa_coord)
+                    aa_coord = []
+            dataset_coord[name] = torch.FloatTensor(dataset_coord[name])
+            f.readline()
+            line = f.readline()
+    return dataset_coord
+

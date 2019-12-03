@@ -21,3 +21,21 @@ def angle_metrics(pred, test, lengths_test, threshold=0.01):
     accuracy_psi = len(list(filter(lambda x: x < threshold, angle_var_psi))) / len(angle_var_psi)
 
     return mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi
+
+
+def coordinate_metrics(pred, test, lengths):
+    ae = []
+    pred = pred.cpu()
+    test = test.cpu()
+    for i in range(len(lengths)):
+        for j in range(lengths[i]):
+            N_coord_diff = np.linalg.norm(np.array(pred[i][j][:3]) - np.array(test[i][j][:3]))
+            CA_coord_diff = np.linalg.norm(np.array(pred[i][j][3:6]) - np.array(test[i][j][3:6]))
+            C_coord_diff = np.linalg.norm(np.array(pred[i][j][6:]) - np.array(test[i][j][6:]))
+            ae.append(N_coord_diff)
+            ae.append(CA_coord_diff)
+            ae.append(C_coord_diff)
+    mae = np.mean(ae)
+
+    return mae
+
