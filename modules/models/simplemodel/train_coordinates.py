@@ -15,8 +15,8 @@ from models.simplemodel.model import SimpleRNN
 
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 100000
-NUM_WORKERS = 10
-N_LAYERS = 1
+NUM_WORKERS = 16
+N_LAYERS = 2
 BATCH_SIZE = 500
 MODEL_INPUT_SIZE = 100
 MODEL_OUTPUT_SIZE = 9
@@ -60,10 +60,10 @@ def get_dataset(seq, coordinates, logger):
 
 def get_dataloaders(train_dataset, test_dataset, batch_size):
     train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=False, num_workers=batch_size)
+        train_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS)
 
     val_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=batch_size)
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS)
 
     return train_dataloader, val_dataloader
 
@@ -113,9 +113,13 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         # all_targets.append(targets)
                         # all_lengths.append(lengths)
 
-                        mae = coordinate_metrics(preds, targets, lengths)
+                        metrics = coordinate_metrics(preds, targets, lengths, device)
 
-                        wandb.log({"MAE batch": mae})
+                        wandb.log({"MAE batch": metrics['mae']})
+                        wandb.log({"Distance deviation between ends": metrics['diff_ends_dist']})
+                        wandb.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
+                        wandb.log({"Percent distance deviation between ends": metrics['diff_ends_dist_p']})
+                        wandb.log({"Percent distance deviation between neighbours": metrics['diff_neighbours_dist_p']})
 
                 # statistics
                 running_loss += loss_value.item()
@@ -151,11 +155,12 @@ def write_training_epoch(config, epoch):
 
 
 def check_training_epoch(config):
-    if not os.path.isfile(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"]):
-        return 0
-    with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"], 'r') as f:
-        epoch = int(f.read())
-        return epoch
+    # if not os.path.isfile(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"]):
+    #     return 0
+    # with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"], 'r') as f:
+    #     epoch = int(f.read())
+    #     return epoch
+    return 0
 
 
 def try_load_unfinished_model(logger, config):
