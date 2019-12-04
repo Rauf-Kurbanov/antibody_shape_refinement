@@ -2,7 +2,7 @@ import logging
 import argparse
 
 from models.simplemodel.train import simplemodel_train
-from models.simplemodel.train_coordinates import simplemodel_coord_train
+from models.simplemodel_coordinates.train_coordinates import simplemodel_coord_train
 
 from config_loader import load_config
 
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     choice_model = args['model']
     try:
         if choice_model == 'simple':
-            simplemodel_train(main_logger)
+            simplemodel_train(main_logger, use_backup=use_backup)
         elif choice_model == 'simple_coordinates':
             simplemodel_coord_train(main_logger, use_backup=use_backup)
     except:
