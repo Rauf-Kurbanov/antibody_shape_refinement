@@ -163,7 +163,7 @@ def try_load_unfinished_model(logger, config):
         logger.exception('Error loading unfinished simplemodel_coordinates')
 
 
-def simplemodel_coord_train(logger):
+def simplemodel_coord_train(logger, use_backup=False):
     config = load_config()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -177,10 +177,10 @@ def simplemodel_coord_train(logger):
     train_dataloader, val_dataloader = get_dataloaders(train_data, test_data, BATCH_SIZE)
 
     model = SimpleRNN(MODEL_INPUT_SIZE, MODEL_OUTPUT_SIZE, MODEL_HIDDEN_DIM, N_LAYERS)
-    start_epoch = check_training_epoch(config)
+    start_epoch = check_training_epoch(config) if use_backup else 0
     logger.info(f'Starting training from epoch {start_epoch}')
     if start_epoch > 0:
-        state = try_load_unfinished_model(logger, config)
+        state = try_load_unfinished_model(logger, config) if use_backup else None
         if state:
             logger.info(f'Successfully loaded backup model')
             model.load_state_dict(state)
