@@ -148,12 +148,11 @@ def write_training_epoch(config, epoch):
 
 
 def check_training_epoch(config):
-    # if not os.path.isfile(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"]):
-    #     return 0
-    # with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"], 'r') as f:
-    #     epoch = int(f.read())
-    #     return epoch
-    return 0
+    if not os.path.isfile(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"]):
+        return 0
+    with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"], 'r') as f:
+        epoch = int(f.read())
+        return epoch
 
 
 def try_load_unfinished_model(logger, config):
