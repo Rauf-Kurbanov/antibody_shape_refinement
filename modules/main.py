@@ -1,8 +1,8 @@
 import logging
 import argparse
 
-from models.simplemodel.train import simplemodel_train
-from models.simplemodel_coordinates.train_coordinates import simplemodel_coord_train
+from models.simple_architecture.simplemodel.train import simplemodel_train
+from models.simple_architecture.simplemodel_coordinates.train import simplemodel_coord_train
 
 from config_loader import load_config
 
