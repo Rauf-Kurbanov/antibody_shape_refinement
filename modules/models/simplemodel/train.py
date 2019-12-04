@@ -72,10 +72,6 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                 model_backup_path=None, start_epoch=0, num_epoch_before_backup=100):
     for epoch in range(start_epoch, num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
-        # TODO epoch logging
-        # all_preds = []
-        # all_lengths = []
-        # all_targets = []
 
         for phase in ['train', 'val']:
             if phase == 'train':
@@ -108,9 +104,6 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         optimizer.step()
 
                     else:
-                        # all_preds.append(preds)
-                        # all_targets.append(targets)
-                        # all_lengths.append(lengths)
 
                         threshold = 0.1
                         mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets,
@@ -136,19 +129,6 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                 wandb.log({"Train loss": epoch_loss})
             else:
                 wandb.log({"Test loss": epoch_loss})
-
-            # threshold = 0.1
-            # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets,
-            #                                                                        all_lengths, threshold=threshold)
-            # wandb.log({"Mean phi absolute error": mean_var_phi})
-            # wandb.log({"Mean psi absolute error": mean_var_psi})
-            # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
-            # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
-            # threshold = 0.5
-            # mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(all_preds, all_targets, all_lengths,
-            #                                                                        threshold=threshold)
-            # wandb.log({f"Accuracy phi (threshold = {threshold})": accuracy_phi})
-            # wandb.log({f"Accuracy psi (threshold = {threshold})": accuracy_psi})
 
         if epoch % num_epoch_before_backup == 0 and model_backup_path:
             torch.save(model.state_dict(), model_backup_path)

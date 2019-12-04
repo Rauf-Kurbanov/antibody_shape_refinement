@@ -72,10 +72,6 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                 model_backup_path=None, start_epoch=0, num_epoch_before_backup=100):
     for epoch in range(start_epoch, num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
-        # TODO epoch logging
-        # all_preds = []
-        # all_lengths = []
-        # all_targets = []
 
         for phase in ['train', 'val']:
             if phase == 'train':
@@ -109,10 +105,6 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         optimizer.step()
 
                     else:
-                        # all_preds.append(preds)
-                        # all_targets.append(targets)
-                        # all_lengths.append(lengths)
-
                         metrics = coordinate_metrics(preds, targets, lengths, device)
 
                         wandb.log({"MAE batch": metrics['mae']})
