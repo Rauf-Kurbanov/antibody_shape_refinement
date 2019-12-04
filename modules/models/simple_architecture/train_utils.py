@@ -7,7 +7,8 @@ from tqdm import tqdm
 from metrics.metric import angle_metrics, coordinate_metrics
 
 
-def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_epochs, logger, device, config,
+def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, num_epochs, logger, device,
+                config,
                 metrics_logger,
                 model_backup_path=None, start_epoch=0, num_epoch_before_backup=100):
     for epoch in range(start_epoch, num_epochs):
@@ -44,7 +45,7 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         optimizer.step()
 
                     else:
-                        metrics_logger(wandb, preds, targets, lengths)
+                        metrics_logger(preds, targets, lengths, wandb)
 
                 # statistics
                 running_loss += loss_value.item()
@@ -59,30 +60,51 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
 
         if epoch % num_epoch_before_backup == 0 and model_backup_path:
             torch.save(model.state_dict(), model_backup_path)
-            write_training_epoch(config, epoch)
+            write_training_epoch(config, epoch, model_name, logger)
 
     return model
 
 
-def write_training_epoch(config, epoch):
-    with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"], 'w') as f:
+def write_training_epoch(config, epoch, model, logger):
+    if model == 'simple':
+        config_path_name = "PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"
+    elif model == 'simple-coordinates':
+        config_path_name = "PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"
+    else:
+        logger.error(f'Error: no such model {model}')
+        return
+    with open(config[config_path_name], 'w') as f:
         f.write(f"{epoch}")
 
 
-def check_training_epoch(config):
-    if not os.path.isfile(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"]):
+def check_training_epoch(config, model, logger):
+    if model == 'simple':
+        config_path_name = "PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"
+    elif model == 'simple-coordinates':
+        config_path_name = "PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD"
+    else:
+        logger.error(f'Error: no such model {model}')
+        return
+    if not os.path.isfile(config[config_path_name]):
         return 0
-    with open(config["PATH_TO_FINISHED_TRAINING_SIMPLEMODEL"], 'r') as f:
+    with open(config[config_path_name], 'r') as f:
         epoch = int(f.read())
         return epoch
 
 
-def try_load_unfinished_model(logger, config):
+def try_load_unfinished_model(logger, config, model):
+    if model == 'simple':
+        config_path_name = "PATH_TO_SIMPLEMODEL_BACKUP"
+    elif model == 'simple-coordinates':
+        config_path_name = "PATH_TO_SIMPLEMODEL_COORD_BACKUP"
+    else:
+        logger.error(f'Error: no such model {model}')
+        return
     try:
-        state = torch.load(config["PATH_TO_SIMPLEMODEL_BACKUP"])
+        state = torch.load(config[config_path_name])
         return state
     except:
-        logger.exception('Error loading unfinished simplemodel')
+        logger.exception(f'Error loading unfinished {model}')
 
 
 def coordinates_metrics_logger(preds, targets, lengths, logger):
@@ -111,11 +133,11 @@ def angles_metrics_logger(preds, targets, lengths, logger):
     logger.log({f"Accuracy psi (threshold = {threshold}) batch": accuracy_psi})
 
 
-def try_load_model_backup(model, use_backup, logger, config):
-    start_epoch = check_training_epoch(config) if use_backup else 0
+def try_load_model_backup(model, model_name, use_backup, logger, config):
+    start_epoch = check_training_epoch(config, model_name, logger) if use_backup else 0
     logger.info(f'Starting training from epoch {start_epoch}')
     if start_epoch > 0:
-        state = try_load_unfinished_model(logger, config) if use_backup else None
+        state = try_load_unfinished_model(logger, config, model_name) if use_backup else None
         if state:
             logger.info(f'Successfully loaded backup model')
             model.load_state_dict(state)

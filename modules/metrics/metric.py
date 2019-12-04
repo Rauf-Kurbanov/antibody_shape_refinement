@@ -57,15 +57,15 @@ def coordinate_metrics(pred, test, lengths):
                                                                test[i][j][3:6], test[i][j][6:]))
 
             if j != lengths[i] - 1:
-                neighbour_dist_diff.append(distance_diff(pred[i][j][6:], pred[i][j+1][:3],
-                                                         test[i][j][6:], test[i][j+1][:3]))
+                neighbour_dist_diff.append(distance_diff(pred[i][j][6:], pred[i][j + 1][:3],
+                                                         test[i][j][6:], test[i][j + 1][:3]))
                 neighbour_dist_diff_p.append(distance_diff_percent(pred[i][j][6:], pred[i][j + 1][:3],
                                                                    test[i][j][6:], test[i][j + 1][:3]))
 
-        dist_diff.append(distance_diff(pred[i][0][:3], pred[i][lengths[i]-1][6:],
-                                       test[i][0][:3], test[i][lengths[i]-1][6:]))
-        dist_diff_p.append(distance_diff_percent(pred[i][0][:3], pred[i][lengths[i]-1][6:],
-                                                 test[i][0][:3], test[i][lengths[i]-1][6:]))
+        dist_diff.append(distance_diff(pred[i][0][:3], pred[i][lengths[i] - 1][6:],
+                                       test[i][0][:3], test[i][lengths[i] - 1][6:]))
+        dist_diff_p.append(distance_diff_percent(pred[i][0][:3], pred[i][lengths[i] - 1][6:],
+                                                 test[i][0][:3], test[i][lengths[i] - 1][6:]))
 
     metrics['mae'] = torch.mean(torch.stack(ae))
     metrics['diff_ends_dist'] = torch.mean(torch.stack(dist_diff))
@@ -76,4 +76,3 @@ def coordinate_metrics(pred, test, lengths):
     # TODO angles metric
 
     return metrics
-
