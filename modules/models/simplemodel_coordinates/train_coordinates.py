@@ -11,7 +11,7 @@ from tqdm.auto import tqdm
 
 from config_loader import load_config
 from metrics.metric import coordinate_metrics
-from models.simplemodel.model import SimpleRNN
+from models.simplemodel_coordinates.model import SimpleRNN
 
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 100000
@@ -20,7 +20,7 @@ N_LAYERS = 2
 BATCH_SIZE = 500
 MODEL_INPUT_SIZE = 100
 MODEL_OUTPUT_SIZE = 9
-MODEL_HIDDEN_DIM = 20
+MODEL_HIDDEN_DIM = 40
 
 
 def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test, logger):
@@ -105,12 +105,13 @@ def train_model(train_dataloader, val_dataloader, model, loss, optimizer, num_ep
                         optimizer.step()
 
                     else:
-                        metrics = coordinate_metrics(preds, targets, lengths, device)
+                        metrics = coordinate_metrics(preds, targets, lengths)
 
                         wandb.log({"MAE batch": metrics['mae']})
                         wandb.log({"Distance deviation between ends": metrics['diff_ends_dist']})
                         wandb.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
                         wandb.log({"Percent distance deviation between ends": metrics['diff_ends_dist_p']})
+                        logger.info(metrics['diff_ends_dist_p'])
                         wandb.log({"Percent distance deviation between neighbours": metrics['diff_neighbours_dist_p']})
 
                 # statistics
