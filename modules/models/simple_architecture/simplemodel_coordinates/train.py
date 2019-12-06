@@ -24,12 +24,11 @@ MODEL_NAME = 'simple-coordinates'
 def distances_between_atoms(loop):
     def roll(x):
         return torch.cat((x[:, -1:, :], x[:, :-1, :]), 1)
-
     loop = loop.view(loop.shape[0], -1, 3)
     rolled_loop = roll(loop)
     cropped_loop = loop[:, :-1]
     cropped_rolled_loop = rolled_loop[:, :-1]
-    return torch.sum(torch.sqrt((cropped_loop - cropped_rolled_loop) ** 2), dim=-1)
+    return torch.sqrt(torch.sum((cropped_loop - cropped_rolled_loop) ** 2, dim=-1))
 
 
 class DistanceLoss(nn.Module):
