@@ -25,54 +25,48 @@ def angle_metrics(pred, test, lengths_test, threshold=0.01):
     return mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi
 
 
-def distance_diff(a1, a2, b1, b2):
-    return abs(torch.dist(a1, a2) - torch.dist(b1, b2))
+def scalar_prod(v1, v2):
+    return torch.sum(v1 * v2, dim=-1)
 
 
-def distance_diff_percent(a1, a2, b1, b2):
-    return distance_diff(a1, a2, b1, b2) / torch.dist(b1, b2)
+def norm(v1):
+    return torch.sqrt(scalar_prod(v1, v1))
+
+
+def distance_between_atoms(loop):
+    loop = loop.view(loop.shape[0], -1, 3)
+    v1 = loop[:, :-1]
+    v2 = loop[:, 1:]
+    return norm(v1 - v2)
+
+
+def replace_nan(tensor):
+    tensor[torch.isnan(tensor)] = 0
+    return tensor
+
+
+def angles_between_atoms(loop):
+    loop = loop.view(loop.shape[0], -1, 3)
+    a = loop[:, :-2]
+    b = loop[:, 1:-1]
+    c = loop[:, 2:]
+    ba = a - b
+    bc = c - b
+    res = torch.acos(scalar_prod(ba, bc)/norm(ba)/norm(bc))
+    res = replace_nan(res)
+    return res
 
 
 def coordinate_metrics(pred, test, lengths):
     metrics = {}
-    ae = []
-    dist_diff = []
-    dist_diff_p = []
-    neighbour_dist_diff = []
-    neighbour_dist_diff_p = []
-    for i in range(len(lengths)):
-        for j in range(lengths[i]):
-            ae.append(torch.dist(pred[i][j][:3], test[i][j][:3]))
-            ae.append(torch.dist(pred[i][j][3:6], test[i][j][3:6]))
-            ae.append(torch.dist(pred[i][j][6:], test[i][j][6:]))
+    pred = pred.view(pred.shape[0], -1, 3)
+    test = test.view(test.shape[0], -1, 3)
 
-            neighbour_dist_diff.append(distance_diff(pred[i][j][:3], pred[i][j][3:6],
-                                                     test[i][j][:3], test[i][j][3:6]))
-            neighbour_dist_diff.append(distance_diff(pred[i][j][3:6], pred[i][j][6:],
-                                                     test[i][j][3:6], test[i][j][6:]))
-
-            neighbour_dist_diff_p.append(distance_diff_percent(pred[i][j][:3], pred[i][j][3:6],
-                                                               test[i][j][:3], test[i][j][3:6]))
-            neighbour_dist_diff_p.append(distance_diff_percent(pred[i][j][3:6], pred[i][j][6:],
-                                                               test[i][j][3:6], test[i][j][6:]))
-
-            if j != lengths[i] - 1:
-                neighbour_dist_diff.append(distance_diff(pred[i][j][6:], pred[i][j + 1][:3],
-                                                         test[i][j][6:], test[i][j + 1][:3]))
-                neighbour_dist_diff_p.append(distance_diff_percent(pred[i][j][6:], pred[i][j + 1][:3],
-                                                                   test[i][j][6:], test[i][j + 1][:3]))
-
-        dist_diff.append(distance_diff(pred[i][0][:3], pred[i][lengths[i] - 1][6:],
-                                       test[i][0][:3], test[i][lengths[i] - 1][6:]))
-        dist_diff_p.append(distance_diff_percent(pred[i][0][:3], pred[i][lengths[i] - 1][6:],
-                                                 test[i][0][:3], test[i][lengths[i] - 1][6:]))
-
-    metrics['mae'] = torch.mean(torch.stack(ae))
-    metrics['diff_ends_dist'] = torch.mean(torch.stack(dist_diff))
-    metrics['diff_neighbours_dist'] = torch.mean(torch.stack(neighbour_dist_diff))
-    metrics['diff_ends_dist_p'] = torch.mean(torch.stack(dist_diff_p))
-    metrics['diff_neighbours_dist_p'] = torch.mean(torch.stack(neighbour_dist_diff_p))
-
-    # TODO angles metric
+    metrics['mae'] = torch.mean(norm(pred - test))
+    metrics['diff_neighbours_dist'] = torch.mean(abs(distance_between_atoms(pred) -
+                                                     distance_between_atoms(test)))
+    metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred) -
+                                            angles_between_atoms(test)))
+    #todo distance between ends metric
 
     return metrics

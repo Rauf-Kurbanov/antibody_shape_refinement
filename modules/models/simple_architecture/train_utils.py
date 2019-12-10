@@ -5,9 +5,10 @@ import torch.nn.utils.rnn as rnn_utils
 import wandb
 from tqdm import tqdm
 from metrics.metric import angle_metrics, coordinate_metrics
+from torch import autograd
 
 
-def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, num_epochs, logger, device,
+def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, scheduler, num_epochs, logger, device,
                 config,
                 metrics_logger,
                 model_backup_path=None, start_epoch=0, num_epoch_before_backup=100):
@@ -17,6 +18,7 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
         for phase in ['train', 'val']:
             if phase == 'train':
                 dataloader = train_dataloader
+                scheduler.step()
                 model.train()
             else:
                 dataloader = val_dataloader
@@ -27,25 +29,26 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
             for inputs, targets, lengths in tqdm(dataloader):
                 inputs = inputs.to(device)
 
-                # repad target sequences
                 targets = rnn_utils.pack_padded_sequence(targets, lengths, batch_first=True)
                 targets, _ = rnn_utils.pad_packed_sequence(targets, batch_first=True)
                 targets = targets.to(device)
 
                 optimizer.zero_grad()
 
-                # forward and backward
                 with torch.set_grad_enabled(phase == 'train'):
                     preds, lengths, hiddens = model(inputs, lengths)
+
                     loss_value = loss(preds, targets)
 
-                    # backward + optimize only if in training phase
                     if phase == 'train':
+                        # with autograd.detect_anomaly():
+
                         loss_value.backward()
                         optimizer.step()
 
                     else:
-                        metrics_logger(preds, targets, lengths, wandb)
+                        if epoch % 10 == 0:
+                            metrics_logger(preds, targets, lengths, wandb)
 
                 # statistics
                 running_loss += loss_value.item()
@@ -55,6 +58,7 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
             logger.info(f'{phase} Loss: {epoch_loss}')
             if phase == 'train':
                 wandb.log({"Train loss": epoch_loss})
+                print(epoch_loss)
             else:
                 wandb.log({"Test loss": epoch_loss})
 
@@ -111,10 +115,8 @@ def coordinates_metrics_logger(preds, targets, lengths, logger):
     metrics = coordinate_metrics(preds, targets, lengths)
 
     logger.log({"MAE batch": metrics['mae']})
-    logger.log({"Distance deviation between ends": metrics['diff_ends_dist']})
     logger.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
-    logger.log({"Percent distance deviation between ends": metrics['diff_ends_dist_p']})
-    logger.log({"Percent distance deviation between neighbours": metrics['diff_neighbours_dist_p']})
+    logger.log({"Angles deviation": metrics['diff_angles']})
 
 
 def angles_metrics_logger(preds, targets, lengths, logger):
@@ -144,7 +146,7 @@ def try_load_model_backup(model, model_name, use_backup, logger, config):
     return start_epoch, model
 
 
-def initialize_wandb(model, config, n_layers, batch_size, model_name):
+def initialize_wandb(model, config, n_layers, batch_size, model_name, hidden_dim):
     wandb.init(project=config["PROJECT_NAME"],
-               name=f"{model_name} n_layers={n_layers} batch_size={batch_size}")
+               name=f"{model_name} n_layers={n_layers} batch_size={batch_size} hidden_dim={hidden_dim} with_scheduler")
     wandb.watch(model)

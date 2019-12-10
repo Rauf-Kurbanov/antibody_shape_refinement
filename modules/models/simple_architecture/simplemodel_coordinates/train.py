@@ -9,26 +9,17 @@ import models.simple_architecture.data_utils as data_utils
 import models.simple_architecture.train_utils as train_utils
 from config_loader import load_config
 from models.simple_architecture.simplemodel_coordinates.model import SimpleRNN
+from metrics.metric import distance_between_atoms, angles_between_atoms
 
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 100000
 NUM_WORKERS = 16
-N_LAYERS = 2
+N_LAYERS = 3
 BATCH_SIZE = 500
 MODEL_INPUT_SIZE = 100
 MODEL_OUTPUT_SIZE = 9
-MODEL_HIDDEN_DIM = 40
+MODEL_HIDDEN_DIM = 30
 MODEL_NAME = 'simple-coordinates'
-
-
-def distances_between_atoms(loop):
-    def roll(x):
-        return torch.cat((x[:, -1:, :], x[:, :-1, :]), 1)
-    loop = loop.view(loop.shape[0], -1, 3)
-    rolled_loop = roll(loop)
-    cropped_loop = loop[:, :-1]
-    cropped_rolled_loop = rolled_loop[:, :-1]
-    return torch.sqrt(torch.sum((cropped_loop - cropped_rolled_loop) ** 2, dim=-1))
 
 
 class DistanceLoss(nn.Module):
@@ -37,9 +28,21 @@ class DistanceLoss(nn.Module):
         self.mse_loss_function = nn.MSELoss()
 
     def forward(self, pred, target):
-        distances_pred = distances_between_atoms(pred)
-        distances_target = distances_between_atoms(target)
+        distances_pred = distance_between_atoms(pred)
+        distances_target = distance_between_atoms(target)
         z = self.mse_loss_function(distances_pred, distances_target)
+        return z
+
+
+class AnglesLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse_loss_function = nn.MSELoss()
+
+    def forward(self, pred, target):
+        angles_pred = angles_between_atoms(pred)
+        angles_target = angles_between_atoms(target)
+        z = self.mse_loss_function(angles_pred, angles_target)
         return z
 
 
@@ -48,11 +51,14 @@ class ComplexLoss(nn.Module):
         super().__init__()
         self.mse_loss_function = nn.MSELoss()
         self.distance_loss_function = DistanceLoss()
+        self.angles_loss_function = AnglesLoss()
 
     def forward(self, pred, target):
         mse_loss = self.mse_loss_function(pred, target)
         distance_loss = self.distance_loss_function(pred, target)
-        z = mse_loss + distance_loss
+        angles_loss = self.angles_loss_function(pred, target)
+        z = mse_loss + distance_loss + angles_loss
+        #todo add distance between ends loss
         return z
 
 
@@ -70,12 +76,16 @@ def simplemodel_coord_train(logger, use_backup=False):
     start_epoch, model = train_utils.try_load_model_backup(model, MODEL_NAME, use_backup, logger, config)
     model.to(device)
 
-    train_utils.initialize_wandb(model, config, N_LAYERS, BATCH_SIZE, 'simple-model-coordinates')
+    train_utils.initialize_wandb(model, config, N_LAYERS, BATCH_SIZE, 'simple-model-coordinates', MODEL_HIDDEN_DIM)
 
     loss = ComplexLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, NUM_EPOCHS, logger,
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.002, step_size_up=100,
+                                                  cycle_momentum=False)
+
+    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, scheduler, NUM_EPOCHS, logger,
                             device,
                             config,
                             train_utils.coordinates_metrics_logger,
