@@ -52,7 +52,7 @@ def angles_between_atoms(loop):
     c = loop[:, 2:]
     ba = a - b
     bc = c - b
-    res = torch.acos(scalar_prod(ba, bc)/norm(ba)/norm(bc))
+    res = scalar_prod(ba, bc)/norm(ba)/norm(bc)
     res = replace_nan(res)
     return res
 
