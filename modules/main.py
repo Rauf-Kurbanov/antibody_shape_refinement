@@ -1,12 +1,13 @@
 import logging
 import argparse
+from pathlib import Path
 
 from models.simple_architecture.simplemodel.train import simplemodel_train
 from models.simple_architecture.simplemodel_coordinates.train import simplemodel_coord_train
 
 from config_loader import load_config
 
-MODELS_NAMES = ['simple', 'simple_coordinates']
+MODELS_NAMES = ['simple', 'simple_coordinates', 'simple_coordinates_a']
 
 
 def get_logger():
@@ -16,6 +17,7 @@ def get_logger():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     config = load_config()
+    # Path(config["DEBUG_LOG"]).touch()
     file_handler = logging.FileHandler(config["DEBUG_LOG"])
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -45,5 +47,7 @@ if __name__ == '__main__':
             simplemodel_train(main_logger, use_backup=use_backup)
         elif choice_model == 'simple_coordinates':
             simplemodel_coord_train(main_logger, use_backup=use_backup)
+        elif choice_model == 'simple_coordinates_a':
+            simplemodel_coord_train(main_logger, use_backup=use_backup, autoregressive=True)
     except:
         main_logger.exception('Exception while training a model')

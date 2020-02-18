@@ -34,7 +34,8 @@ def norm(v1):
 
 
 def distance_between_atoms(loop):
-    loop = loop.view(loop.shape[0], -1, 3)
+    loop = loop.reshape(loop.shape[0], -1, 3)
+    # loop = loop.view(loop.shape[0], -1, 3)
     v1 = loop[:, :-1]
     v2 = loop[:, 1:]
     return norm(v1 - v2)
@@ -46,7 +47,8 @@ def replace_nan(tensor):
 
 
 def angles_between_atoms(loop):
-    loop = loop.view(loop.shape[0], -1, 3)
+    loop = loop.reshape(loop.shape[0], -1, 3)
+    # loop = loop.view(loop.shape[0], -1, 3)
     a = loop[:, :-2]
     b = loop[:, 1:-1]
     c = loop[:, 2:]

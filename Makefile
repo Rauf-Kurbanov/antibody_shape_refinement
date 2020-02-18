@@ -139,6 +139,7 @@ jupyter: upload-code upload-notebooks ### Run a job with Jupyter Notebook and op
 		--preset $(TRAINING_MACHINE_TYPE) \
 		--http 8888 \
 		$(HTTP_AUTH) \
+		-e EXPOSE_SSH=true \
 		--browse \
 		--volume $(DATA_DIR_STORAGE):$(PROJECT_PATH_ENV)/$(DATA_DIR):ro \
 		--volume $(PROJECT_PATH_STORAGE)/$(CODE_DIR):$(PROJECT_PATH_ENV)/$(CODE_DIR):rw \
@@ -200,3 +201,10 @@ lint:  ### Run static code analysis locally
 .PHONY: ps
 ps:  ### List all running and pending jobs
 	$(NEURO) ps
+
+JOB_NAME_FWD=jupyter-antibody-shape-refinement
+LOCAL_PORT_FWD=8100
+
+.PHONY: port_local
+port_local:
+	neuro port-forward $(JOB_NAME_FWD) $(LOCAL_PORT_FWD):22

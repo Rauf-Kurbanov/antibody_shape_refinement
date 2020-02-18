@@ -1,14 +1,25 @@
 import pickle
+import numpy as np
 
 from torch.utils.data import DataLoader
 import torch.nn.utils.rnn as rnn_utils
 
-NUM_WORKERS = 16
+NUM_WORKERS = 1
 
 
-def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test):
-    X_train_padded = rnn_utils.pad_sequence(X_train, batch_first=True)
+# NUM_WORKERS = 16
+
+
+def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test, max_length=None):
+    if max_length is not None:
+        X_train = [x[:max_length] for x in X_train]
+        X_test = [x[:max_length] for x in X_test]
+        y_train = [y[:max_length] for y in y_train]
+        y_test = [y[:max_length] for y in y_test]
+        lengths_train = [np.minimum(l, max_length) for l in lengths_train]
+        lengths_test = [np.minimum(l, max_length) for l in lengths_test]
     y_train_padded = rnn_utils.pad_sequence(y_train, batch_first=True)
+    X_train_padded = rnn_utils.pad_sequence(X_train, batch_first=True)
     train_dataset = [[X_train_padded[i], y_train_padded[i], lengths_train[i]] for i in range(len(X_train_padded))]
 
     X_test_padded = rnn_utils.pad_sequence(X_test, batch_first=True)
@@ -42,6 +53,7 @@ def get_dataset_angles(seq, angles):
 
 def get_dataset_coordinates(seq, coordinates):
     full_data = [[len(seq[x]), seq[x], coordinates[x.decode('ascii')]] for x in seq.keys()]
+    # todo add shuffle
     test_data = full_data[:int(len(full_data) / 10)]
     train_data = full_data[int(len(full_data) / 10):]
 
@@ -57,17 +69,19 @@ def get_dataset_coordinates(seq, coordinates):
     X_test = [test_data[i][1] for i in range(len(test_data))]
     y_test = [test_data[i][2] for i in range(len(test_data))]
 
-    train_dataset, test_dataset = pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test)
+    train_dataset, test_dataset = pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test, max_length=50)
+    train_dataset_nopad = list(zip(X_train, y_train))
+    test_dataset_nopad = list(zip(X_test, y_test))
 
-    return train_dataset, test_dataset
+    return train_dataset, test_dataset, train_dataset_nopad, test_dataset_nopad
 
 
 def get_dataloaders(train_dataset, test_dataset, batch_size):
     train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS)
+        train_dataset, batch_size=batch_size, shuffle=False)
 
     val_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS)
+        test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_dataloader, val_dataloader
 
