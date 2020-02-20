@@ -72,34 +72,43 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
     return model
 
 
-def get_character_level_data(inputs, targets, hiddens, preds_seq, preds, idx):
+def get_character_level_data(inputs, targets, hiddens, prev_preds, preds, idx):
     new_inputs = []
     new_targets = []
     new_h = []
     new_c = []
     new_preds = []
-    new_preds_seq = []
-    if preds_seq.shape[0] > 0:
-        for input, target, h, c, pred_seq, pred in zip(inputs, targets, hiddens[0], hiddens[1], preds_seq, preds):
-
-            if input.shape[0] > idx:
-                assert target.shape[0] == input.shape[0]
-                new_inputs.append(input[idx])
-                new_targets.append(target[:idx + 1])
-                new_h.append(h)
-                new_c.append(c)
-                new_preds_seq.append(pred_seq)
-                new_preds.append(pred)
-    else:
+    new_prev_preds = []
+    # new_preds_seq = []
+    if prev_preds.shape[0] == 0:
         for input, target, h, c, pred in zip(inputs, targets, hiddens[0], hiddens[1], preds):
 
             if input.shape[0] > idx:
                 assert target.shape[0] == input.shape[0]
                 new_inputs.append(input[idx])
-                new_targets.append(target[:idx + 1])
+                if idx == 0:
+                    new_targets.append(target[0])
+                else:
+                    new_targets.append(target[idx - 1:idx + 1])
+                # new_targets.append(target[:idx])
                 new_h.append(h)
                 new_c.append(c)
                 new_preds.append(pred)
+    else:
+        for input, target, h, c, prev_pred, pred in zip(inputs, targets, hiddens[0], hiddens[1], prev_preds, preds):
+
+            if input.shape[0] > idx:
+                assert target.shape[0] == input.shape[0]
+                new_inputs.append(input[idx])
+                if idx == 0:
+                    new_targets.append(target[0])
+                else:
+                    new_targets.append(target[idx - 1:idx + 1])
+                # new_targets.append(target[:idx])
+                new_h.append(h)
+                new_c.append(c)
+                new_preds.append(pred)
+                new_prev_preds.append(prev_pred)
     # new_preds = list(filter(lambda x: x.shape[0] > idx, inputs))
 
     # inputs = list(filter(lambda x: x.shape[0] > idx, inputs))
@@ -110,9 +119,10 @@ def get_character_level_data(inputs, targets, hiddens, preds_seq, preds, idx):
     new_targets = torch.stack(new_targets)
     new_h = torch.stack(new_h)
     new_c = torch.stack(new_c)
-    new_preds_seq = torch.stack(new_preds_seq) if len(new_preds_seq) > 0 else preds_seq
+    # new_preds_seq = torch.stack(new_preds_seq) if len(new_preds_seq) > 0 else preds_seq
     new_preds = torch.stack(new_preds)
-    return new_inputs, new_targets, (new_h, new_c), new_preds_seq, new_preds
+    new_prev_preds = torch.stack(new_prev_preds) if len(new_prev_preds) != 0 else torch.FloatTensor([])
+    return new_inputs, new_targets, (new_h, new_c), new_prev_preds, new_preds
 
 
 def unpad_data(inputs, targets, lengths):
@@ -153,39 +163,50 @@ def train_model_autoregressive(train_dataloader, val_dataloader, model, model_na
                 inputs_nopad, targets_nopad = unpad_data(inputs, targets, lengths)
                 max_length = max(lengths)
 
-                optimizer.zero_grad()
-
                 hiddens = model.init_hiddens(inputs.shape[0])
                 preds = model.init_preds(inputs.shape[0])
+                prev_preds = torch.FloatTensor([])
+                preds_accum = torch.FloatTensor([])
+                targets_accum = torch.FloatTensor([])
 
-                # как считать лосс тут? Накапливать последовательность и считать по ней
                 with torch.set_grad_enabled(phase == 'train'):
-                    loss_value_target = 0
-                    preds_seq = torch.FloatTensor([])
+                    loss_value_target = torch.FloatTensor([0])
+                    # preds_seq = torch.FloatTensor([])
                     for i in range(max_length):
-                        input_char, target_char, hiddens, preds_seq, preds = get_character_level_data(inputs_nopad,
-                                                                                               targets_nopad,
-                                                                                               hiddens, preds_seq, preds, i)
-                        model_input = torch.cat((input_char, preds), 1)
+                        input_char, target_char, hiddens, prev_preds, preds = get_character_level_data(inputs_nopad,
+                                                                                                       targets_nopad,
+                                                                                                       hiddens,
+                                                                                                       prev_preds,
+                                                                                                       preds, i)
+                        model_input = torch.cat((input_char, preds.detach()), 1)
+                        # preds_accum = torch.cat((preds_accum, preds.unsqueeze(1)), 1)
+
                         preds, hiddens = model(model_input, hiddens)
-                        preds_seq = torch.cat((preds_seq, preds.unsqueeze(1)), 1)
 
-                        loss_value = loss(preds_seq, target_char)
-                        loss_value_target += loss_value.item()
+                        # targets_accum = torch.cat((targets_accum, targets[:, -1].unsqueeze(1)), 1)
+                        edge = torch.cat((prev_preds.unsqueeze(1), preds.unsqueeze(1)), 1) \
+                            if prev_preds.shape[0] > 0 else preds.unsqueeze(1)
 
-                        if phase == 'train':
-                            # with autograd.detect_anomaly():
+                        loss_value = loss(edge, target_char)
+                        loss_value_target += loss_value
 
-                            loss_value.backward(retain_graph=True)
-                            optimizer.step()
+                        prev_preds = preds.detach()
+                    optimizer.zero_grad()
+                    if phase == 'train':
+                        # with autograd.detect_anomaly():
 
-                        else:
-                            if epoch % 10 == 0:
-                                pass
-                            # metrics_logger(preds, targets, lengths, wandb)
+                        loss_value_target.backward()
+                        optimizer.step()
 
+                    else:
+                        if epoch % 10 == 0:
+                            pass
+                    if epoch % 10 == 0:
+                        pass
+                        # metrics_logger(preds_accum, targets_accum, lengths, wandb)
+                    # loss_value_target /= max_length
                     # statistics
-                    running_loss += loss_value.item()
+                    running_loss += loss_value_target.item()
 
             epoch_loss = running_loss / len(dataloader)
 

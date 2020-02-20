@@ -55,7 +55,7 @@ def angles_between_atoms(loop):
     ba = a - b
     bc = c - b
     res = scalar_prod(ba, bc)/norm(ba)/norm(bc)
-    res = replace_nan(res)
+    # res = replace_nan(res)
     return res
 
 
