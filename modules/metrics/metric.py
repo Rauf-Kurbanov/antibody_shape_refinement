@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import itertools
 
 
 def sin_cos_to_angle(x):
@@ -40,11 +41,6 @@ def distance_between_atoms(loop):
     return norm(v1 - v2)
 
 
-def replace_nan(tensor):
-    tensor[torch.isnan(tensor)] = 0
-    return tensor
-
-
 def angles_between_atoms(loop):
     loop = loop.view(loop.shape[0], -1, 3)
     a = loop[:, :-2]
@@ -52,8 +48,7 @@ def angles_between_atoms(loop):
     c = loop[:, 2:]
     ba = a - b
     bc = c - b
-    res = scalar_prod(ba, bc)/norm(ba)/norm(bc)
-    res = replace_nan(res)
+    res = scalar_prod(ba, bc) / norm(ba) / norm(bc)
     return res
 
 
@@ -67,6 +62,6 @@ def coordinate_metrics(pred, test, lengths):
                                                      distance_between_atoms(test)))
     metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred) -
                                             angles_between_atoms(test)))
-    #todo distance between ends metric
+    # todo distance between ends metric
 
     return metrics
