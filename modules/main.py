@@ -16,7 +16,7 @@ def get_logger():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     config = load_config()
-    file_handler = logging.FileHandler(config["DEBUG_LOG"])
+    file_handler = logging.FileHandler(config["PATH_TO_DEBUG_LOG"])
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
@@ -31,6 +31,8 @@ def get_parser():
                         help='Which model to run')
     parser.add_argument('--use_backup', type=bool, default=False,
                         help='Use a backup or not')
+    parser.add_argument('--debug', type=bool, default=False,
+                        help='Use a backup or not')
     return parser
 
 
@@ -40,10 +42,13 @@ if __name__ == '__main__':
     args = vars(main_parser.parse_known_args()[0])
     use_backup = args['use_backup']
     choice_model = args['model']
+    debug = args['debug']
     try:
         if choice_model == 'simple':
             simplemodel_train(main_logger, use_backup=use_backup)
         elif choice_model == 'simple_coordinates':
-            simplemodel_coord_train(main_logger, use_backup=use_backup)
+            simplemodel_coord_train(main_logger, use_backup=use_backup, debug=debug)
     except:
+        if debug:
+            raise
         main_logger.exception('Exception while training a model')

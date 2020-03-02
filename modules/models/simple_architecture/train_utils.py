@@ -8,10 +8,11 @@ from metrics.metric import angle_metrics, coordinate_metrics
 from torch import autograd
 
 
-def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, scheduler, num_epochs, logger, device,
+def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, scheduler, num_epochs, logger,
+                device,
                 config,
                 metrics_logger,
-                model_backup_path=None, start_epoch=0, num_epoch_before_backup=100):
+                model_backup_path=None, start_epoch=0, num_epoch_before_backup=100, debug=False):
     for epoch in range(start_epoch, num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
 
@@ -38,7 +39,7 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
                 with torch.set_grad_enabled(phase == 'train'):
                     preds, lengths, hiddens = model(inputs, lengths)
 
-                    loss_value = loss(preds, targets)
+                    loss_value = loss(preds, targets, lengths)
 
                     if phase == 'train':
                         # with autograd.detect_anomaly():
@@ -48,7 +49,10 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
 
                     else:
                         if epoch % 10 == 0:
-                            metrics_logger(preds, targets, lengths, wandb)
+                            if debug:
+                                metrics_logger(preds, targets, lengths, logger, on_cpu=True)
+                            else:
+                                metrics_logger(preds, targets, lengths, wandb, on_cpu=False)
 
                 # statistics
                 running_loss += loss_value.item()
@@ -57,10 +61,12 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
 
             logger.info(f'{phase} Loss: {epoch_loss}')
             if phase == 'train':
-                wandb.log({"Train loss": epoch_loss})
+                if not debug:
+                    wandb.log({"Train loss": epoch_loss})
                 print(epoch_loss)
             else:
-                wandb.log({"Test loss": epoch_loss})
+                if not debug:
+                    wandb.log({"Test loss": epoch_loss})
 
         if epoch % num_epoch_before_backup == 0 and model_backup_path:
             torch.save(model.state_dict(), model_backup_path)
@@ -111,12 +117,17 @@ def try_load_unfinished_model(logger, config, model):
         logger.exception(f'Error loading unfinished {model}')
 
 
-def coordinates_metrics_logger(preds, targets, lengths, logger):
-    metrics = coordinate_metrics(preds, targets, lengths)
+def coordinates_metrics_logger(preds, targets, lengths, logger, on_cpu=False):
+    metrics = coordinate_metrics(preds, targets, lengths, on_cpu)
 
-    logger.log({"MAE batch": metrics['mae']})
-    logger.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
-    logger.log({"Angles deviation": metrics['diff_angles']})
+    if on_cpu:
+        logger.info(f"MAE batch: {metrics['mae']}")
+        logger.info(f"Distance deviation between neighbours: {metrics['diff_neighbours_dist']}")
+        logger.info(f"Angles deviation: {metrics['diff_angles']}")
+    else:
+        logger.log({"MAE batch": metrics['mae']})
+        logger.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
+        logger.log({"Angles deviation": metrics['diff_angles']})
 
 
 def angles_metrics_logger(preds, targets, lengths, logger):

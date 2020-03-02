@@ -73,10 +73,10 @@ def get_dataset_coordinates(seq, coordinates):
 
 def get_dataloaders(train_dataset, test_dataset, batch_size):
     train_dataloader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS)
+        train_dataset, batch_size=batch_size, shuffle=False)
 
     val_dataloader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=NUM_WORKERS)
+        test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_dataloader, val_dataloader
 
