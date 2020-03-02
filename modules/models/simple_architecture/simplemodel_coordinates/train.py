@@ -42,8 +42,8 @@ class AnglesLoss(nn.Module):
         self.on_cpu = on_cpu
 
     def forward(self, pred, target, lengths):
-        angles_pred = angles_between_atoms(pred, self.on_cpu)
-        angles_target = angles_between_atoms(target, self.on_cpu)
+        angles_pred = angles_between_atoms(pred, lengths, self.on_cpu)
+        angles_target = angles_between_atoms(target, lengths, self.on_cpu)
         z = self.mse_loss_function(angles_pred, angles_target)
         return z
 

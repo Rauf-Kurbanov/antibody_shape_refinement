@@ -41,14 +41,23 @@ def distance_between_atoms(loop, on_cpu=False):
     return norm(v1 - v2)
 
 
-def angles_between_atoms(loop, on_cpu=False):
+def angles_between_atoms(loop, lengths, on_cpu=False):
     loop = loop.reshape(loop.shape[0], -1, 3) if on_cpu else loop.view(loop.shape[0], -1, 3)
     a = loop[:, :-2]
     b = loop[:, 1:-1]
     c = loop[:, 2:]
     ba = a - b
     bc = c - b
-    res = scalar_prod(ba, bc) / norm(ba) / norm(bc)
+    norm_ba = norm(ba)
+    norm_bc = norm(bc)
+    # remove possible nans
+    mask = torch.zeros_like(norm_ba)
+    for i, l in enumerate(lengths):
+        l = l * 3 - 2
+        mask[i, l + 1:] = 1
+    norm_ba = norm_ba + mask
+    norm_bc = norm_bc + mask
+    res = scalar_prod(ba, bc) / norm_ba / norm_bc
     return res
 
 
@@ -60,8 +69,8 @@ def coordinate_metrics(pred, test, lengths, on_cpu=False):
     metrics['mae'] = torch.mean(norm(pred - test))
     metrics['diff_neighbours_dist'] = torch.mean(abs(distance_between_atoms(pred, on_cpu) -
                                                      distance_between_atoms(test, on_cpu)))
-    metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred, on_cpu) -
-                                            angles_between_atoms(test, on_cpu)))
+    metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred, lengths, on_cpu) -
+                                            angles_between_atoms(test, lengths, on_cpu)))
     # todo distance between ends metric
 
     return metrics
