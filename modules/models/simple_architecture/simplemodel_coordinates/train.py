@@ -8,7 +8,7 @@ import wandb
 import models.simple_architecture.data_utils as data_utils
 import models.simple_architecture.train_utils as train_utils
 from config_loader import load_config
-from models.simple_architecture.simplemodel_coordinates.model import SimpleRNN
+from models.simple_architecture.model import SimpleRNN
 from metrics.metric import distance_between_atoms, angles_between_atoms
 
 LEARNING_RATE = 0.001
@@ -88,11 +88,12 @@ def simplemodel_coord_train(logger, use_backup=False, debug=False):
     scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.002, step_size_up=100,
                                                   cycle_momentum=False)
 
-    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, scheduler, NUM_EPOCHS,
+    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, NUM_EPOCHS,
                             logger,
                             device,
                             config,
                             train_utils.coordinates_metrics_logger,
+                            scheduler=scheduler,
                             start_epoch=start_epoch, model_backup_path=config["PATH_TO_SIMPLEMODEL_COORD_BACKUP"],
                             num_epoch_before_backup=config["NUM_EPOCH_BEFORE_BACKUP"],
                             debug=debug)

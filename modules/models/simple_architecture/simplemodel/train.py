@@ -8,7 +8,7 @@ import wandb
 import models.simple_architecture.data_utils as data_utils
 import models.simple_architecture.train_utils as train_utils
 from config_loader import load_config
-from models.simple_architecture.simplemodel.model import SimpleRNN
+from models.simple_architecture.model import SimpleRNN
 
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 100000
@@ -21,7 +21,7 @@ MODEL_HIDDEN_DIM = 20
 MODEL_NAME = 'simple'
 
 
-def simplemodel_train(logger, use_backup=False):
+def simplemodel_train(logger, use_backup=False, debug=False):
     config = load_config()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if not torch.cuda.is_available():
@@ -35,15 +35,16 @@ def simplemodel_train(logger, use_backup=False):
     start_epoch, model = train_utils.try_load_model_backup(model, MODEL_NAME, use_backup, logger, config)
     model.to(device)
 
-    train_utils.initialize_wandb(model, config, N_LAYERS, BATCH_SIZE, 'simple-model-angles')
+    train_utils.initialize_wandb(model, config, N_LAYERS, BATCH_SIZE, 'simple-model-angles', MODEL_HIDDEN_DIM)
 
     loss = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, NUM_EPOCHS, logger,
+    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, NUM_EPOCHS,
+                            logger,
                             device,
-                            config, train_utils.angles_metrics_logger,
+                            config, metrics_logger=train_utils.angles_metrics_logger,
                             start_epoch=start_epoch, model_backup_path=config["PATH_TO_SIMPLEMODEL_BACKUP"],
-                            num_epoch_before_backup=config["NUM_EPOCH_BEFORE_BACKUP"])
+                            num_epoch_before_backup=config["NUM_EPOCH_BEFORE_BACKUP"], debug=debug)
     train_utils.write_training_epoch(config, 0, MODEL_NAME, logger)
     torch.save(model.state_dict(), os.path.join(wandb.run.dir, 'model.pt'))

@@ -5,13 +5,13 @@ import torch.nn.utils.rnn as rnn_utils
 import wandb
 from tqdm import tqdm
 from metrics.metric import angle_metrics, coordinate_metrics
-from torch import autograd
 
 
-def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, scheduler, num_epochs, logger,
+def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, num_epochs, logger,
                 device,
                 config,
                 metrics_logger,
+                scheduler=None,
                 model_backup_path=None, start_epoch=0, num_epoch_before_backup=100, debug=False):
     for epoch in range(start_epoch, num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
@@ -19,7 +19,8 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
         for phase in ['train', 'val']:
             if phase == 'train':
                 dataloader = train_dataloader
-                scheduler.step()
+                if scheduler is not None:
+                    scheduler.step()
                 model.train()
             else:
                 dataloader = val_dataloader

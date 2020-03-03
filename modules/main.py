@@ -45,7 +45,7 @@ if __name__ == '__main__':
     debug = args['debug']
     try:
         if choice_model == 'simple':
-            simplemodel_train(main_logger, use_backup=use_backup)
+            simplemodel_train(main_logger, use_backup=use_backup, debug=debug)
         elif choice_model == 'simple_coordinates':
             simplemodel_coord_train(main_logger, use_backup=use_backup, debug=debug)
     except:
