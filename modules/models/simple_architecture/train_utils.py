@@ -43,7 +43,6 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
                     loss_value = loss(preds, targets, lengths)
 
                     if phase == 'train':
-                        # with autograd.detect_anomaly():
 
                         loss_value.backward()
                         optimizer.step()
