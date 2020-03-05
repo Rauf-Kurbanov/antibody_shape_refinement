@@ -61,12 +61,18 @@ def angles_between_atoms(loop, lengths, on_cpu=False):
     return res
 
 
+def rmsd(pred, test, lengths):
+    msd = torch.sum((pred - test) ** 2, dim=-1).sum(dim=-1) / lengths.float()
+    return torch.sqrt(msd).mean()
+
+
 def coordinate_metrics(pred, test, lengths, on_cpu=False):
     metrics = {}
     pred = pred.reshape(pred.shape[0], -1, 3) if on_cpu else pred.view(pred.shape[0], -1, 3)
     test = test.reshape(pred.shape[0], -1, 3) if on_cpu else test.view(pred.shape[0], -1, 3)
 
     metrics['mae'] = torch.mean(norm(pred - test))
+    metrics['rmsd'] = rmsd(pred, test, lengths)
     metrics['diff_neighbours_dist'] = torch.mean(abs(distance_between_atoms(pred, on_cpu) -
                                                      distance_between_atoms(test, on_cpu)))
     metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred, lengths, on_cpu) -

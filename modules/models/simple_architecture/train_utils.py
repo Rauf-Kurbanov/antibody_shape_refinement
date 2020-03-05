@@ -30,6 +30,7 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
 
             for inputs, targets, lengths in tqdm(dataloader):
                 inputs = inputs.to(device)
+                lengths = lengths.to(device)
 
                 targets = rnn_utils.pack_padded_sequence(targets, lengths, batch_first=True)
                 targets, _ = rnn_utils.pad_packed_sequence(targets, batch_first=True)
@@ -122,10 +123,12 @@ def coordinates_metrics_logger(preds, targets, lengths, logger, on_cpu=False):
 
     if on_cpu:
         logger.info(f"MAE batch: {metrics['mae']}")
+        logger.info(f"RMSD batch: {metrics['rmsd']}")
         logger.info(f"Distance deviation between neighbours: {metrics['diff_neighbours_dist']}")
         logger.info(f"Angles deviation: {metrics['diff_angles']}")
     else:
         logger.log({"MAE batch": metrics['mae']})
+        logger.log({"RMSD batch": metrics['rmsd']})
         logger.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
         logger.log({"Angles deviation": metrics['diff_angles']})
 
