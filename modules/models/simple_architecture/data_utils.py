@@ -40,6 +40,7 @@ def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test, max_
     return train_dataset, test_dataset
 
 
+# todo fix batching
 def get_dataset_angles(seq, angles):
     full_data = [[len(seq[x]), seq[x], angles[x]] for x in seq.keys()]
     test_data = full_data[:int(len(full_data) / 10)]
@@ -62,9 +63,22 @@ def get_dataset_angles(seq, angles):
     return train_dataset, test_dataset
 
 
-def get_dataset_coordinates(seq, coordinates):
-    full_data = [[len(seq[x]), seq[x], coordinates[x.decode('ascii')]] for x in seq.keys()]
-    train_data, test_data = train_test_split(full_data, test_size=0.1, shuffle=True)
+def get_full_data_coordinates(seq, coordinates):
+    return [[x, len(seq[x]), seq[x], coordinates[x.decode('ascii')]] for x in seq.keys()]
+
+
+def dump_test_dataset(test_data, config):
+    with open(config['PATH_TO_TEST_DATASET_IDS'], 'w') as f:
+        for data in test_data:
+            f.write(str(data[0]) + '\n')
+
+
+def get_dataset_coordinates(seq, coordinates, config, test_size=0.1):
+    full_data = get_full_data_coordinates(seq, coordinates)
+    train_data, test_data = train_test_split(full_data, test_size=test_size, shuffle=True)
+    dump_test_dataset(test_data, config)
+    train_data = [[x[1], x[2], x[3]] for x in train_data]
+    test_data = [[x[1], x[2], x[3]] for x in test_data]
     return train_data, test_data
 
 
@@ -87,17 +101,19 @@ def get_dataloaders(train_dataset, test_dataset, batch_size):
     return train_dataloader, val_dataloader
 
 
-def get_embedded_data_angles(config):
-    with open(config["PATH_TO_SEQ_EMBEDDED"], 'rb') as handle:
+def get_sequence_data(seq_path, target_path):
+    with open(seq_path, 'rb') as handle:
         seq = pickle.load(handle)
-    with open(config["PATH_TO_ANGLES_EMBEDDED"], 'rb') as handle:
-        angles = pickle.load(handle)
+    with open(target_path, 'rb') as handle:
+        target = pickle.load(handle)
+    return seq, target
+
+
+def get_embedded_data_angles(config):
+    seq, angles = get_sequence_data(config["PATH_TO_SEQ_EMBEDDED"], config["PATH_TO_ANGLES_EMBEDDED"])
     return seq, angles
 
 
 def get_embedded_data_coordinates(config):
-    with open(config["PATH_TO_SEQ_EMBEDDED"], 'rb') as handle:
-        seq = pickle.load(handle)
-    with open(config["PATH_TO_COORD_EMBEDDED"], 'rb') as handle:
-        coordinates = pickle.load(handle)
+    seq, coordinates = get_sequence_data(config["PATH_TO_SEQ_EMBEDDED"], config["PATH_TO_COORD_EMBEDDED"])
     return seq, coordinates

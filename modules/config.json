@@ -11,6 +11,8 @@
   "PATH_TO_FINISHED_TRAINING_SIMPLEMODEL_COORD": "../results/finished_training_simplemodel_coord.txt",
   "PATH_TO_SIMPLEMODEL_BACKUP": "../results/simplemodel_backup",
   "PATH_TO_SIMPLEMODEL_COORD_BACKUP": "../results/simplemodel_coord_backup",
+  "PATH_TO_TEST_RESULTS": "../results/test_results/",
+  "PATH_TO_TEST_DATASET_IDS": "../results/test_dataset_ids.txt",
   "NUM_EPOCH_BEFORE_BACKUP": 200,
   "PATH_TO_DEBUG_LOG": "model.log"
 }

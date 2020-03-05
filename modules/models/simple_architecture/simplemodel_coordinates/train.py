@@ -84,7 +84,7 @@ def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
         logger.error("Cuda is unavailable")
 
     seq, coord = data_utils.get_embedded_data_coordinates(config)
-    train_data, test_data = data_utils.get_dataset_coordinates(seq, coord)
+    train_data, test_data = data_utils.get_dataset_coordinates(seq, coord, config)
     train_dataloader, val_dataloader = data_utils.get_dataloaders(train_data, test_data, params['batch_size'])
 
     model = SimpleRNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'])
