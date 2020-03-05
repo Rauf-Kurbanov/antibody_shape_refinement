@@ -33,6 +33,20 @@ def get_parser():
                         help='Use a backup or not')
     parser.add_argument('--debug', type=bool, default=False,
                         help='Use a backup or not')
+    parser.add_argument('--model_input_size', type=int, required=True,
+                        help='Model input size')
+    parser.add_argument('--model_output_size', type=int, required=True,
+                        help='Model output size')
+    parser.add_argument('--model_hidden_dim', type=int, required=True,
+                        help='Model hidden dim')
+    parser.add_argument('--learning_rate', type=float, required=True,
+                        help='Model hidden dim')
+    parser.add_argument('--n_layers', type=int, required=True,
+                        help='Number of lstm layers')
+    parser.add_argument('--batch_size', type=int, required=True,
+                        help='Batch size')
+    parser.add_argument('--epochs', type=int, required=True,
+                        help='Number of epochs')
     return parser
 
 
@@ -47,7 +61,9 @@ if __name__ == '__main__':
         if choice_model == 'simple':
             simplemodel_train(main_logger, use_backup=use_backup, debug=debug)
         elif choice_model == 'simple_coordinates':
-            simplemodel_coord_train(main_logger, use_backup=use_backup, debug=debug)
+            simplemodel_coord_train(main_logger, args, use_backup=use_backup, debug=debug)
+        else:
+            raise RuntimeError(f'Unknown model \'{choice_model}\'. Available models: {MODELS_NAMES}')
     except:
         if debug:
             raise

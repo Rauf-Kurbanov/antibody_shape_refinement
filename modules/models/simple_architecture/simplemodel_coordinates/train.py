@@ -11,14 +11,6 @@ from config_loader import load_config
 from models.simple_architecture.model import SimpleRNN
 from metrics.metric import distance_between_atoms, angles_between_atoms
 
-LEARNING_RATE = 0.001
-NUM_EPOCHS = 100000
-# NUM_WORKERS = 16
-N_LAYERS = 3
-BATCH_SIZE = 500
-MODEL_INPUT_SIZE = 100
-MODEL_OUTPUT_SIZE = 9
-MODEL_HIDDEN_DIM = 30
 MODEL_NAME = 'simple-coordinates'
 
 
@@ -64,7 +56,28 @@ class ComplexLoss(nn.Module):
         return z
 
 
-def simplemodel_coord_train(logger, use_backup=False, debug=False):
+def parse_parameters(args):
+    # todo add default params or throw exception
+    model_input_size = args['model_input_size']
+    model_output_size = args['model_output_size']
+    model_hidden_dim = args['model_hidden_dim']
+    learning_rate = args['learning_rate']
+    n_layers = args['n_layers']
+    batch_size = args['batch_size']
+    epochs = args['epochs']
+    return {
+        "input_size": model_input_size,
+        "output_size": model_output_size,
+        "hidden_dim": model_hidden_dim,
+        "learning_rate": learning_rate,
+        "n_layers": n_layers,
+        "batch_size": batch_size,
+        "epochs": epochs,
+    }
+
+
+def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
+    params = parse_parameters(args)
     config = load_config()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if not torch.cuda.is_available():
@@ -72,23 +85,25 @@ def simplemodel_coord_train(logger, use_backup=False, debug=False):
 
     seq, coord = data_utils.get_embedded_data_coordinates(config)
     train_data, test_data = data_utils.get_dataset_coordinates(seq, coord)
-    train_dataloader, val_dataloader = data_utils.get_dataloaders(train_data, test_data, BATCH_SIZE)
+    train_dataloader, val_dataloader = data_utils.get_dataloaders(train_data, test_data, params['batch_size'])
 
-    model = SimpleRNN(MODEL_INPUT_SIZE, MODEL_OUTPUT_SIZE, MODEL_HIDDEN_DIM, N_LAYERS)
+    model = SimpleRNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'])
     start_epoch, model = train_utils.try_load_model_backup(model, MODEL_NAME, use_backup, logger, config)
     model.to(device)
 
     if not debug:
-        train_utils.initialize_wandb(model, config, N_LAYERS, BATCH_SIZE, 'simple-model-coordinates', MODEL_HIDDEN_DIM)
+        train_utils.initialize_wandb(model, config, params['n_layers'], params['batch_size'],
+                                     'simple-model-coordinates', params['hidden_dim'])
 
     loss = ComplexLoss(on_cpu=debug)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=params['learning_rate'])
 
+    scheduler = None
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.002, step_size_up=100,
-                                                  cycle_momentum=False)
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.002, step_size_up=100,
+    #                                               cycle_momentum=False)
 
-    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, NUM_EPOCHS,
+    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, params['epochs'],
                             logger,
                             device,
                             config,
