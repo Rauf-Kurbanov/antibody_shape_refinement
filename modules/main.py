@@ -25,14 +25,12 @@ def get_logger():
 
 def get_parser():
     parser = argparse.ArgumentParser()
-
     parser.add_argument('--model', type=str, default='simple',
                         choices=MODELS_NAMES,
                         help='Which model to run')
     parser.add_argument('--use_backup', type=bool, default=False,
                         help='Use a backup or not')
-    parser.add_argument('--debug', type=bool, default=False,
-                        help='Use a backup or not')
+    parser.add_argument('--debug', type=bool, default=False)
     parser.add_argument('--model_input_size', type=int, required=True,
                         help='Model input size')
     parser.add_argument('--model_output_size', type=int, required=True,

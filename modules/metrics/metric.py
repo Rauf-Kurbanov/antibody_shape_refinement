@@ -63,7 +63,7 @@ def angles_between_atoms(loop, lengths, on_cpu=False):
 
 def rmsd(pred, test, lengths):
     msd = torch.sum((pred - test) ** 2, dim=-1).sum(dim=-1) / lengths.float()
-    return torch.sqrt(msd).mean()
+    return torch.sqrt(msd)
 
 
 def coordinate_metrics(pred, test, lengths, on_cpu=False):
@@ -71,8 +71,16 @@ def coordinate_metrics(pred, test, lengths, on_cpu=False):
     pred = pred.reshape(pred.shape[0], -1, 3) if on_cpu else pred.view(pred.shape[0], -1, 3)
     test = test.reshape(pred.shape[0], -1, 3) if on_cpu else test.view(pred.shape[0], -1, 3)
 
-    metrics['mae'] = torch.mean(norm(pred - test))
-    metrics['rmsd'] = rmsd(pred, test, lengths)
+    mae_batch = norm(pred - test)
+    rmsd_batch = rmsd(pred, test, lengths)
+    metrics['mae'] = mae_batch.mean()
+    metrics['mae_min'] = mae_batch.min()
+    metrics['mae_max'] = mae_batch.max()
+    metrics['mae_median'] = mae_batch.median()
+    metrics['rmsd'] = rmsd_batch.mean()
+    metrics['rmsd_max'] = rmsd_batch.max()
+    metrics['rmsd_min'] = rmsd_batch.min()
+    metrics['rmsd_median'] = rmsd_batch.median()
     metrics['diff_neighbours_dist'] = torch.mean(abs(distance_between_atoms(pred, on_cpu) -
                                                      distance_between_atoms(test, on_cpu)))
     metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred, lengths, on_cpu) -

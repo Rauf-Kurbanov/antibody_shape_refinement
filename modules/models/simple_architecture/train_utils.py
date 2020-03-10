@@ -123,12 +123,24 @@ def coordinates_metrics_logger(preds, targets, lengths, logger, on_cpu=False):
 
     if on_cpu:
         logger.info(f"MAE batch: {metrics['mae']}")
+        logger.info(f"Min MAE batch: {metrics['mae_min']}")
+        logger.info(f"Max MAE batch: {metrics['mae_max']}")
+        logger.info(f"Median MAE batch: {metrics['mae_median']}")
         logger.info(f"RMSD batch: {metrics['rmsd']}")
+        logger.info(f"Min RMSD batch: {metrics['rmsd_min']}")
+        logger.info(f"Max RMSD batch: {metrics['rmsd_max']}")
+        logger.info(f"Median RMSD batch: {metrics['rmsd_median']}")
         logger.info(f"Distance deviation between neighbours: {metrics['diff_neighbours_dist']}")
         logger.info(f"Angles deviation: {metrics['diff_angles']}")
     else:
         logger.log({"MAE batch": metrics['mae']})
+        logger.log({"Min MAE batch": metrics['mae_min']})
+        logger.log({"Max MAE batch": metrics['mae_max']})
+        logger.log({"Median MAE batch": metrics['mae_median']})
         logger.log({"RMSD batch": metrics['rmsd']})
+        logger.log({"Min RMSD batch": metrics['rmsd_min']})
+        logger.log({"Max RMSD batch": metrics['rmsd_max']})
+        logger.log({"Median RMSD batch": metrics['rmsd_median']})
         logger.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
         logger.log({"Angles deviation": metrics['diff_angles']})
 
