@@ -45,6 +45,7 @@ def get_parser():
                         help='Batch size')
     parser.add_argument('--epochs', type=int, required=True,
                         help='Number of epochs')
+    parser.add_argument('--save_prefix', type=str, help='path prefix for saving models (default: no saving)')
     return parser
 
 

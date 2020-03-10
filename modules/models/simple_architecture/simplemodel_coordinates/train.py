@@ -78,6 +78,7 @@ def parse_parameters(args):
 
 def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
     params = parse_parameters(args)
+    save_prefix = args['save_prefix']
     config = load_config()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if not torch.cuda.is_available():
@@ -113,4 +114,6 @@ def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
                             num_epoch_before_backup=config["NUM_EPOCH_BEFORE_BACKUP"],
                             debug=debug)
     train_utils.write_training_epoch(config, 0, MODEL_NAME, logger)
-    torch.save(model.state_dict(), os.path.join(wandb.run.dir, 'model-coordinates.pt'))
+    if save_prefix is not None:
+        model_path = '../results/' + save_prefix + '.sav'
+        torch.save(model.cpu(), model_path)
