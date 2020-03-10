@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import itertools
 
 
 def sin_cos_to_angle(x):
@@ -30,15 +29,11 @@ def scalar_prod(v1, v2):
     return torch.sum(v1 * v2, dim=-1)
 
 
-def norm(v1):
-    return torch.sqrt(scalar_prod(v1, v1))
-
-
 def distance_between_atoms(loop, on_cpu=False):
     loop = loop.reshape(loop.shape[0], -1, 3) if on_cpu else loop.view(loop.shape[0], -1, 3)
     v1 = loop[:, :-1]
     v2 = loop[:, 1:]
-    return norm(v1 - v2)
+    return (v1 - v2).norm(dim=-1)
 
 
 def angles_between_atoms(loop, lengths, on_cpu=False):
@@ -48,8 +43,8 @@ def angles_between_atoms(loop, lengths, on_cpu=False):
     c = loop[:, 2:]
     ba = a - b
     bc = c - b
-    norm_ba = norm(ba)
-    norm_bc = norm(bc)
+    norm_ba = ba.norm(dim=-1)
+    norm_bc = bc.norm(dim=-1)
     # remove possible nans
     mask = torch.zeros_like(norm_ba)
     for i, l in enumerate(lengths):
@@ -71,7 +66,7 @@ def coordinate_metrics(pred, test, lengths, on_cpu=False):
     pred = pred.reshape(pred.shape[0], -1, 3) if on_cpu else pred.view(pred.shape[0], -1, 3)
     test = test.reshape(pred.shape[0], -1, 3) if on_cpu else test.view(pred.shape[0], -1, 3)
 
-    mae_batch = norm(pred - test)
+    mae_batch = (pred - test).norm(dim=-1)
     rmsd_batch = rmsd(pred, test, lengths)
     metrics['mae'] = mae_batch.mean()
     metrics['mae_min'] = mae_batch.min()
