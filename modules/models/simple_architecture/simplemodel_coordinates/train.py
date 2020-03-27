@@ -20,9 +20,14 @@ class DistanceLoss(nn.Module):
         self.mse_loss_function = nn.MSELoss()
         self.on_cpu = on_cpu
 
+    def reshape_loop(self, loop):
+        return loop.reshape(loop.shape[0], -1, 3) if self.on_cpu else loop.view(loop.shape[0], -1, 3)
+
     def forward(self, pred, target):
-        distances_pred = distance_between_atoms(pred, self.on_cpu)
-        distances_target = distance_between_atoms(target, self.on_cpu)
+        pred = self.reshape_loop(pred)
+        target = self.reshape_loop(target)
+        distances_pred = distance_between_atoms(pred)
+        distances_target = distance_between_atoms(target)
         z = self.mse_loss_function(distances_pred, distances_target)
         return z
 

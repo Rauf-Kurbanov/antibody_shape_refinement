@@ -146,19 +146,10 @@ def coordinates_metrics_logger(preds, targets, lengths, logger, on_cpu=False):
 
 
 def angles_metrics_logger(preds, targets, lengths, logger):
-    threshold = 0.1
-    mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets,
-                                                                           lengths,
-                                                                           threshold=threshold)
+    mean_var_phi, mean_var_psi = angle_metrics(preds, targets,
+                                               lengths)
     logger.log({"Phi MAE batch": mean_var_phi})
     logger.log({"Psi MAE batch": mean_var_psi})
-    logger.log({f"Accuracy phi (threshold = {threshold}) batch": accuracy_phi})
-    logger.log({f"Accuracy psi (threshold = {threshold}) batch": accuracy_psi})
-    threshold = 0.5
-    mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi = angle_metrics(preds, targets, lengths,
-                                                                           threshold=threshold)
-    logger.log({f"Accuracy phi (threshold = {threshold}) batch": accuracy_phi})
-    logger.log({f"Accuracy psi (threshold = {threshold}) batch": accuracy_psi})
 
 
 def try_load_model_backup(model, model_name, use_backup, logger, config):

@@ -3,34 +3,34 @@ import torch
 
 
 def sin_cos_to_angle(x):
-    return np.math.atan2(x[0], x[1]), np.math.atan2(x[2], x[3])
+    sin_phi, cos_phi, sin_psi, cos_psi = x
+    return np.math.atan2(sin_phi, cos_phi), np.math.atan2(sin_psi, cos_psi)
 
 
-def angle_metrics(pred, test, lengths_test, threshold=0.01):
-    angle_var_phi = []
-    angle_var_psi = []
+def angle_metrics(pred, test, lengths_test):
+    mean_var_phi = 0
+    mean_var_psi = 0
+    cnt = 0
 
     for i in range(len(lengths_test)):
         for j in range(lengths_test[i]):
+            cnt += 1
             pred_phi, pred_psi = sin_cos_to_angle(pred[i][j])
             test_phi, test_psi = sin_cos_to_angle(test[i][j])
-            angle_var_phi.append(np.abs(pred_phi - test_phi))
-            angle_var_psi.append(np.abs(pred_psi - test_psi))
+            mean_var_phi += np.abs(pred_phi - test_phi)
+            mean_var_psi += np.abs(pred_psi - test_psi)
 
-    mean_var_phi = np.mean(angle_var_phi)
-    mean_var_psi = np.mean(angle_var_psi)
-    accuracy_phi = len(list(filter(lambda x: x < threshold, angle_var_phi))) / len(angle_var_phi)
-    accuracy_psi = len(list(filter(lambda x: x < threshold, angle_var_psi))) / len(angle_var_psi)
+    mean_var_phi = mean_var_phi / cnt
+    mean_var_psi = mean_var_psi / cnt
 
-    return mean_var_phi, accuracy_phi, mean_var_psi, accuracy_psi
+    return mean_var_phi, mean_var_psi
 
 
 def scalar_prod(v1, v2):
     return torch.sum(v1 * v2, dim=-1)
 
 
-def distance_between_atoms(loop, on_cpu=False):
-    loop = loop.reshape(loop.shape[0], -1, 3) if on_cpu else loop.view(loop.shape[0], -1, 3)
+def distance_between_atoms(loop):
     v1 = loop[:, :-1]
     v2 = loop[:, 1:]
     return (v1 - v2).norm(dim=-1)
@@ -76,8 +76,8 @@ def coordinate_metrics(pred, test, lengths, on_cpu=False):
     metrics['rmsd_max'] = rmsd_batch.max()
     metrics['rmsd_min'] = rmsd_batch.min()
     metrics['rmsd_median'] = rmsd_batch.median()
-    metrics['diff_neighbours_dist'] = torch.mean(abs(distance_between_atoms(pred, on_cpu) -
-                                                     distance_between_atoms(test, on_cpu)))
+    metrics['diff_neighbours_dist'] = torch.mean(abs(distance_between_atoms(pred) -
+                                                     distance_between_atoms(test)))
     metrics['diff_angles'] = torch.mean(abs(angles_between_atoms(pred, lengths, on_cpu) -
                                             angles_between_atoms(test, lengths, on_cpu)))
     # todo distance between ends metric
