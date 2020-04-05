@@ -40,7 +40,6 @@ def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test, max_
     return train_dataset, test_dataset
 
 
-# todo fix batching
 def get_dataset_angles(seq, angles):
     full_data = [[len(seq[x]), seq[x], angles[x]] for x in seq.keys()]
     test_data = full_data[:int(len(full_data) / 10)]
@@ -73,8 +72,21 @@ def dump_test_dataset(test_data, config):
             f.write(str(data[0]) + '\n')
 
 
+def get_unique_data_points(full_data):
+    data_tensors = [x[2] for x in full_data]
+    idx = set()
+    for i in range(len(data_tensors)):
+        for j in range(i + 1, len(data_tensors)):
+            if data_tensors[i].shape[0] == data_tensors[j].shape[0] and torch.eq(data_tensors[i],
+                                                                                 data_tensors[j]).all():
+                idx.add(j)
+    result = [x for i, x in enumerate(full_data) if i not in idx]
+    return result
+
+
 def get_dataset_coordinates(seq, coordinates, config, test_size=0.1):
     full_data = get_full_data_coordinates(seq, coordinates)
+    full_data = get_unique_data_points(full_data)
     train_data, test_data = train_test_split(full_data, test_size=test_size, shuffle=True)
     dump_test_dataset(test_data, config)
     train_data = [[x[1], x[2], x[3]] for x in train_data]
