@@ -8,7 +8,7 @@ import wandb
 import models.simple_architecture.data_utils as data_utils
 import models.simple_architecture.train_utils as train_utils
 from config_loader import load_config
-from models.simple_architecture.model import SimpleRNN
+from models.simple_architecture.model import SimpleRNN, SimpleCharRNN
 from metrics.metric import distance_between_atoms, angles_between_atoms
 
 MODEL_NAME = 'simple-coordinates'
@@ -93,7 +93,7 @@ def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
     train_data, test_data = data_utils.get_dataset_coordinates(seq, coord, config)
     train_dataloader, val_dataloader = data_utils.get_dataloaders(train_data, test_data, params['batch_size'])
 
-    model = SimpleRNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'])
+    model = SimpleCharRNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'], device)
     start_epoch, model = train_utils.try_load_model_backup(model, MODEL_NAME, use_backup, logger, config)
     model.to(device)
 

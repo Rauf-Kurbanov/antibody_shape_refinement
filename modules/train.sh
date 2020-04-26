@@ -6,5 +6,5 @@ python3 main.py --model simple_coordinates \
 --learning_rate=0.001 \
 --n_layers=1 \
 --batch_size=500 \
---epochs=1 \
+--epochs=5000 \
 --save_prefix=test
