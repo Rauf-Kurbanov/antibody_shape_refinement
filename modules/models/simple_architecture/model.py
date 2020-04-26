@@ -35,7 +35,8 @@ def rescale_prediction(pred):
     d1 = 1.4555
     d2 = 1.5223
     d3 = 1.3282
-    d = torch.tensor([d1, d2, d3] * len(pred))
+    ds = [d1, d3, d2]
+    d = torch.tensor(ds * len(pred)).to(pred.device)
     d = d[:len(pred) - 1]
     x1 = pred[:-1]
     x2 = pred[1:]
@@ -52,8 +53,46 @@ def rescale_prediction(pred):
 
 class SimpleCharRNN(nn.Module):
 
-    def __init__(self, input_size, output_size, hidden_dim, n_layers, device):
+    def __init__(self, input_size, output_size, hidden_dim, n_layers, device, bilstm=False):
         super(SimpleCharRNN, self).__init__()
+        self.bilstm = bilstm
+        self.device = device
+        if self.bilstm:
+            self.model_forward = SimpleCharRNNUnit(input_size, output_size, hidden_dim, n_layers, device)
+            self.model_backward = SimpleCharRNNUnit(input_size, output_size, hidden_dim, n_layers, device)
+        else:
+            self.model = SimpleCharRNNUnit(input_size, output_size, hidden_dim, n_layers, device)
+
+    def reverse_tensor(self, x):
+        x = x.permute(1, 0, 2)
+        idx = [i for i in range(x.size(0) - 1, -1, -1)]
+        idx = torch.LongTensor(idx).to(self.device)
+        inverted_tensor = x.index_select(0, idx)
+        inverted_tensor = inverted_tensor.permute(1, 0, 2)
+        return inverted_tensor
+
+    def use_corrector(self, use):
+        if self.bilstm:
+            self.model_forward.use_corrector(use)
+            # self.model_backward.use_corrector(use)
+        else:
+            self.model.use_corrector(use)
+
+    def forward(self, x, lengths, hiddens=None):
+        if self.bilstm:
+            answer_b, lengths_b, z_b = self.model_backward(self.reverse_tensor(x), lengths, hiddens)
+            answer_f, lengths_f, z_f = self.model_forward(x, lengths, hiddens, self.reverse_tensor(answer_b))
+            # answer, lengths, z = answer_f + answer_b / 2, lengths_f, z_f
+            answer, lengths, z = answer_f, lengths_f, z_f
+            return answer, lengths, z
+        else:
+            return self.model(x, lengths, hiddens)
+
+
+class SimpleCharRNNUnit(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_dim, n_layers, device):
+        super(SimpleCharRNNUnit, self).__init__()
 
         self.hidden_dim = hidden_dim
         self.output_size = output_size
@@ -61,16 +100,20 @@ class SimpleCharRNN(nn.Module):
         self.device = device
 
         self.lstmcell = nn.LSTMCell(input_size + 9, hidden_dim)
-        self.h2h = nn.Linear(hidden_dim, hidden_dim)
+        # self.h2h = nn.Linear(hidden_dim, hidden_dim)
         self.h2o = nn.Linear(hidden_dim, output_size)
+        # self.h2o = nn.Sequential(nn.LayerNorm(hidden_dim), nn.ReLU(), nn.Dropout(inplace=True),
+        #                          nn.Linear(hidden_dim, output_size))
         self.corrector_i = 0
         self.use_corrector_flag = False
 
     def init_hiddens(self, batch):
         h0 = torch.zeros(batch, self.hidden_dim).requires_grad_()
+        nn.init.kaiming_uniform_(h0)
 
         # Initialize cell state
         c0 = torch.zeros(batch, self.hidden_dim).requires_grad_()
+        nn.init.kaiming_uniform_(c0)
         return (h0, c0)
 
     def use_corrector(self, use):
@@ -91,7 +134,7 @@ class SimpleCharRNN(nn.Module):
 
         return coordinates
 
-    def forward(self, x, lengths, hiddens=None):
+    def forward(self, x, lengths, hiddens=None, y=None):
         batch_size = x.shape[0]
         h, c = self.init_hiddens(batch_size)
         answer = torch.FloatTensor([])
@@ -102,19 +145,23 @@ class SimpleCharRNN(nn.Module):
         answer = answer.to(self.device)
         output_i = output_i.to(self.device)
 
-        first_iter = True
         for i, input_i in enumerate(x.chunk(x.size(1), dim=1)):
             input_i = torch.cat((input_i, output_i.unsqueeze(1)), dim=-1)
             h, c = self.lstmcell(input_i.squeeze(1), (h, c))
-            h = self.h2h(h)
             output_i = self.h2o(h)
-            if self.use_corrector_flag and not self.training and output_i_prev is not None:
-                last_two = torch.cat((output_i_prev.unsqueeze(1), output_i.unsqueeze(1)), dim=1)
-                if not first_iter:
-                    _, output_i = self.correct_coordinates(last_two, np.arange(len(lengths))[lengths <= i]).chunk(2, 1)
-                first_iter = False
-                output_i[i >= lengths] = torch.zeros_like(output_i[0])
-                output_i = output_i.view(-1, 9)
+            if y is not None:
+                output_i = (output_i + y[:, i, :]) / 2
+            if self.use_corrector_flag and not self.training:
+                if output_i_prev is not None:
+                    last_two = torch.cat((output_i_prev.unsqueeze(1), output_i.unsqueeze(1)), dim=1)
+                    _, output_i = self.correct_coordinates(last_two,
+                                                           np.arange(len(lengths.cpu()))[lengths.cpu() <= i]) \
+                        .chunk(2, 1)
+                    output_i[i >= lengths] = torch.zeros_like(output_i[0])
+                    output_i = output_i.view(-1, 9)
+                else:
+                    output_i = self.correct_coordinates(output_i.unsqueeze(1), np.array([]))
+                    output_i = output_i.view(-1, 9)
             output_i_prev = output_i.view(-1, 9).clone()
             answer = torch.cat((answer, output_i.unsqueeze(1)), dim=1)
 

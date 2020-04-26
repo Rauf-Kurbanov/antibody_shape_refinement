@@ -84,9 +84,17 @@ def get_unique_data_points(full_data):
     return result
 
 
+def cut_data_accoarding_to_length(full_data):
+    low = 10
+    hi = 25
+    full_data = list(filter(lambda x: x[1] >= low and x[1] <= hi, full_data))
+    return full_data
+
+
 def get_dataset_coordinates(seq, coordinates, config, test_size=0.1):
     full_data = get_full_data_coordinates(seq, coordinates)
     full_data = get_unique_data_points(full_data)
+    full_data = cut_data_accoarding_to_length(full_data)
     train_data, test_data = train_test_split(full_data, test_size=test_size, shuffle=True)
     dump_test_dataset(test_data, config)
     train_data = [[x[1], x[2], x[3]] for x in train_data]

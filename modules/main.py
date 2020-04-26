@@ -46,6 +46,7 @@ def get_parser():
     parser.add_argument('--epochs', type=int, required=True,
                         help='Number of epochs')
     parser.add_argument('--save_prefix', type=str, help='path prefix for saving models (default: no saving)')
+    parser.add_argument('--test_size', type=float, default=0.1, help='Test dataset size. Should be between 0 and 1.')
     return parser
 
 

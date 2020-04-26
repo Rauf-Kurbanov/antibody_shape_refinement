@@ -66,7 +66,7 @@ def coordinate_metrics(pred, test, lengths, on_cpu=False):
     pred = pred.reshape(pred.shape[0], -1, 3) if on_cpu else pred.view(pred.shape[0], -1, 3)
     test = test.reshape(pred.shape[0], -1, 3) if on_cpu else test.view(pred.shape[0], -1, 3)
 
-    mae_batch = (pred - test).norm(dim=-1)
+    mae_batch = (pred - test).norm(dim=-1).mean(-1)
     rmsd_batch = rmsd(pred, test, lengths)
     metrics['mae'] = mae_batch.mean()
     metrics['mae_min'] = mae_batch.min()
