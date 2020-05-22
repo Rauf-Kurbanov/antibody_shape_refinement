@@ -1,7 +1,49 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import torch.nn.utils.rnn as rnn_utils
+
+
+class PSEModel(nn.Module):
+
+    def __init__(self, model, path_to_emb_model):
+        super(PSEModel, self).__init__()
+        encoder = torch.load(path_to_emb_model)
+        encoder = encoder.embedding
+        self.emb = encoder
+        self.model = model
+
+    def embed_data(self, x):
+        if self.emb.lm:
+            h = self.emb.embed(x)
+        else:
+            if type(x) is rnn_utils.PackedSequence:
+                h = self.emb.embed(x.data)
+                h = rnn_utils.PackedSequence(h, x.batch_sizes)
+            else:
+                h = self.emb.embed(x)
+
+        h, _ = self.emb.rnn(h)
+
+        if type(h) is rnn_utils.PackedSequence:
+            h = h.data
+            h = self.emb.dropout(h)
+            z = self.emb.proj(h)
+            z = rnn_utils.PackedSequence(z, x.batch_sizes)
+        else:
+            h = h.reshape(-1, h.size(2))
+            h = self.emb.dropout(h)
+            z = self.emb.proj(h)
+            z = z.reshape(x.size(0), x.size(1), -1)
+
+        return z
+
+    def forward(self, x, lengths, hiddens=None):
+        x = self.embed_data(x)
+        x = self.model(x, lengths, hiddens)
+
+        return x
 
 
 class SimpleRNN(nn.Module):
@@ -146,6 +188,9 @@ class SimpleCharRNNUnit(nn.Module):
         output_i = output_i.to(self.device)
 
         for i, input_i in enumerate(x.chunk(x.size(1), dim=1)):
+            x_len = len(x.chunk(x.size(1), dim=1))
+            if i in [0, 1, 2] or i in [x_len - 4, x_len - 3, x_len - 2, x_len - 1]:
+                pass
             input_i = torch.cat((input_i, output_i.unsqueeze(1)), dim=-1)
             h, c = self.lstmcell(input_i.squeeze(1), (h, c))
             output_i = self.h2o(h)
@@ -165,4 +210,148 @@ class SimpleCharRNNUnit(nn.Module):
             output_i_prev = output_i.view(-1, 9).clone()
             answer = torch.cat((answer, output_i.unsqueeze(1)), dim=1)
 
+        return answer, lengths, None
+
+
+class SimpleRNNSphere(nn.Module):
+
+    def __init__(self, input_size, output_size, hidden_dim, n_layers, device, bilstm=True):
+        super(SimpleRNNSphere, self).__init__()
+
+        self.hidden_dim = hidden_dim
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.device = device
+        self.bilstm = bilstm
+
+        self.lstm = nn.LSTM(input_size, hidden_dim, n_layers, batch_first=True, bidirectional=self.bilstm)
+        self.h2o = nn.Linear(2 * hidden_dim if self.bilstm else hidden_dim, output_size)
+        self.tanh = nn.Tanh()
+
+    def get_vector(self, d, angles):
+        theta = angles[:, 0]
+        phi = angles[:, 1]
+        x = d * torch.sin(theta) * torch.cos(phi)
+        y = d * torch.sin(theta) * torch.sin(phi)
+        z = d * torch.cos(theta)
+        return (x, y, z)
+
+    def get_coordinates(self, angles, lengths):
+        d1 = 1.4555
+        d2 = 1.5223
+        d3 = 1.3282
+        d = [d1, d2, d3]
+        point = torch.zeros((angles.shape[0], 3)).to(angles.device)
+        result = []
+        first = True
+        for i in range(angles.shape[1]):
+            for j in range(3):
+                if first:
+                    first = False
+                    result.append(point)
+                else:
+                    k = 2 * j
+                    vector = self.get_vector(d[(j + 2) % 3], angles[:, i, k:k + 2])
+                    point = point + torch.cat(vector).view(point.shape)
+                    point[lengths >= i] = torch.FloatTensor((0, 0, 0)).to(point.device)
+                    result.append(point)
+        result = torch.stack(result).view(angles.shape[0], -1, 9)
+        return result
+
+    def forward(self, x, lengths, hiddens=None, y=None):
+        (h, c) = self.lstm(x)
+        x = self.h2o(h)
+        x = self.tanh(x)
+        angles = torch.atan2(x[:, :, :6], x[:, :, 6:])
+        angles[:, :, 3:] += np.pi
+        angles[:, :, 3:] /= 2
+        answer = self.get_coordinates(angles, lengths)
+        return answer, lengths, None
+
+
+class SimpleCNN(nn.Module):
+    def __init__(self, input_size, output_size, hidden_dim, n_layers, kernel_size, device, dropout=0.2):
+        super(SimpleCNN, self).__init__()
+
+        self.hidden_dim = 128
+        self.output_size = output_size
+        self.n_layers = 0
+        self.kernel_size = kernel_size
+        self.scale = torch.sqrt(torch.FloatTensor([0.5])).to(device)
+        assert kernel_size % 2 == 1, "Kernel size must be odd!"
+        self.device = device
+
+        self.in2hid = nn.Linear(input_size, hidden_dim)
+
+        self.convs_hidden = nn.ModuleList([nn.Conv1d(in_channels=hidden_dim,
+                                                     out_channels=2 * hidden_dim,
+                                                     kernel_size=kernel_size,
+                                                     padding=(kernel_size - 1) // 2)
+                                           for _ in range(self.n_layers)])
+        self.convs = nn.ModuleList([nn.Conv1d(in_channels=128,
+                                              out_channels=64,
+                                              kernel_size=kernel_size,
+                                              padding=(kernel_size - 1) // 2),
+                                    nn.Conv1d(in_channels=64,
+                                              out_channels=32,
+                                              kernel_size=kernel_size,
+                                              padding=(kernel_size - 1) // 2),
+                                    nn.Conv1d(in_channels=32,
+                                              out_channels=16,
+                                              kernel_size=kernel_size,
+                                              padding=(kernel_size - 1) // 2),
+                                    nn.Conv1d(in_channels=16,
+                                              out_channels=9,
+                                              kernel_size=kernel_size,
+                                              padding=(kernel_size - 1) // 2)
+                                    ])
+
+        self.dropout = nn.Dropout(dropout)
+
+        self.lstm_out = SimpleCharRNN(9, 9, 16,
+                                      1, device, bilstm=True)
+        self.fc_out = nn.Linear(9, output_size)
+
+    def forward(self, x, lengths, hiddens=None):
+        conv_input = self.in2hid(x)
+        conv_input = conv_input.permute(0, 2, 1)
+        for i, conv in enumerate(self.convs_hidden):
+            # pass through convolutional layer
+            conved = conv(self.dropout(conv_input))
+
+            # conved = [batch size, 2 * hid dim, src len]
+
+            # pass through GLU activation function
+            conved = F.glu(conved, dim=1)
+
+            # conved = [batch size, hid dim, src len]
+
+            # apply residual connection
+            conved = (conved + conv_input) * self.scale
+
+            # conved = [batch size, hid dim, src len]
+
+            # set conv_input to conved for next loop iteration
+            conv_input = conved
+        for i, conv in enumerate(self.convs):
+            # pass through convolutional layer
+            conved = conv(self.dropout(conv_input))
+
+            # conved = [batch size, 2 * hid dim, src len]
+
+            # pass through GLU activation function
+            # conved = F.glu(conved, dim=1)
+
+            # conved = [batch size, hid dim, src len]
+
+            # apply residual connection
+            # conved = (conved + conv_input) * self.scale
+
+            # conved = [batch size, hid dim, src len]
+
+            # set conv_input to conved for next loop iteration
+            conv_input = conved
+        conved = conved.permute(0, 2, 1)
+        answer, _, _ = self.lstm_out(conved, lengths)
+        answer = self.fc_out(answer)
         return answer, lengths, None

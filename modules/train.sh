@@ -7,4 +7,6 @@ python3 main.py --model simple_coordinates \
 --n_layers=1 \
 --batch_size=32 \
 --epochs=5000 \
---save_prefix=test
+--save_prefix=test \
+--debug=True \
+--embedding=onehot

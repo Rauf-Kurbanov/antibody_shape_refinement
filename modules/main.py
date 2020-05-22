@@ -3,6 +3,7 @@ import argparse
 
 from models.simple_architecture.simplemodel.train import simplemodel_train
 from models.simple_architecture.simplemodel_coordinates.train import simplemodel_coord_train
+from models.simple_architecture.data_utils import Embedding
 
 from config_loader import load_config
 
@@ -47,6 +48,8 @@ def get_parser():
                         help='Number of epochs')
     parser.add_argument('--save_prefix', type=str, help='path prefix for saving models (default: no saving)')
     parser.add_argument('--test_size', type=float, default=0.1, help='Test dataset size. Should be between 0 and 1.')
+    parser.add_argument('--embedding', type=Embedding, default=Embedding.PSE,
+                        help='Type of protein sequence embedding.')
     return parser
 
 
@@ -57,11 +60,12 @@ if __name__ == '__main__':
     use_backup = args['use_backup']
     choice_model = args['model']
     debug = args['debug']
+    embedding = args['embedding']
     try:
         if choice_model == 'simple':
             simplemodel_train(main_logger, use_backup=use_backup, debug=debug)
         elif choice_model == 'simple_coordinates':
-            simplemodel_coord_train(main_logger, args, use_backup=use_backup, debug=debug)
+            simplemodel_coord_train(main_logger, args, use_backup=use_backup, debug=debug, embedding=embedding)
         else:
             raise RuntimeError(f'Unknown model \'{choice_model}\'. Available models: {MODELS_NAMES}')
     except:

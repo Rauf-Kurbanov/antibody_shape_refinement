@@ -1,24 +1,33 @@
 import pickle
 import numpy as np
 import torch
+from enum import Enum
 
 from torch.utils.data import DataLoader
 import torch.nn.utils.rnn as rnn_utils
 from sklearn.model_selection import train_test_split
 
 
-def pad_data_collate(X, y, lengths, max_length=None):
+class Embedding(Enum):
+    ONEHOT = 'onehot'
+    # Protein sequence embedding
+    PSE = 'pse'
+
+
+def pad_data_collate(X, y, lengths, names, max_length=None):
     if max_length is not None:
         X = [x[:max_length] for x in X]
         y = [y[:max_length] for y in y]
         lengths = [np.minimum(l, max_length) for l in lengths]
     y_padded = rnn_utils.pad_sequence(y, batch_first=True)
-    X_padded = rnn_utils.pad_sequence(X, batch_first=True)
-    X, y, lengths = zip(*[[X_padded[i], y_padded[i], lengths[i]] for i in range(len(X_padded))])
+    X_padded = rnn_utils.pad_sequence(X, batch_first=True, padding_value=20)
+    # X_padded = rnn_utils.pad_sequence(X, batch_first=True)
+    X, y, lengths, names = zip(*[[X_padded[i], y_padded[i], lengths[i], names[i]] for i in range(len(X_padded))])
     X = torch.stack(X)
     y = torch.stack(y)
     lengths = torch.tensor(lengths)
-    return X, y, lengths
+    # names = torch.tensor(names)
+    return X, y, lengths, names
 
 
 def pad_data(X_train, y_train, X_test, y_test, lengths_train, lengths_test, max_length=None):
@@ -85,10 +94,16 @@ def get_unique_data_points(full_data):
 
 
 def cut_data_accoarding_to_length(full_data):
-    low = 10
+    low = 4
     hi = 25
     full_data = list(filter(lambda x: x[1] >= low and x[1] <= hi, full_data))
     return full_data
+
+
+def get_test_dataset_coordinates(seq, coordinates):
+    full_data = get_full_data_coordinates(seq, coordinates)
+    data = [[x[1], x[2], x[3]] for x in full_data]
+    return data
 
 
 def get_dataset_coordinates(seq, coordinates, config, test_size=0.1):
@@ -107,8 +122,14 @@ def collate_f(batch):
     lengths = [batch[i][0] for i in range(len(batch))]
     X = [batch[i][1] for i in range(len(batch))]
     y = [batch[i][2] for i in range(len(batch))]
-    data = pad_data_collate(X, y, lengths, max_length=50)
+    names = [batch[i][3] for i in range(len(batch))]
+    data = pad_data_collate(X, y, lengths, names, max_length=50)
     return data
+
+
+def get_test_dataloader(train_dataset, batch_size):
+    test_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_f)
+    return test_dataloader
 
 
 def get_dataloaders(train_dataset, test_dataset, batch_size):
@@ -134,6 +155,27 @@ def get_embedded_data_angles(config):
     return seq, angles
 
 
-def get_embedded_data_coordinates(config):
-    seq, coordinates = get_sequence_data(config["PATH_TO_SEQ_EMBEDDED"], config["PATH_TO_COORD_EMBEDDED"])
+def get_embedded_test_data_coordinates(config, embedding=Embedding.PSE):
+    if embedding == Embedding.PSE:
+        seq_path = config["PATH_TO_TEST_SEQ_EMBEDDED"]
+        coord_path = config["PATH_TO_COORD_EMBEDDED"]
+    elif embedding == Embedding.ONEHOT:
+        seq_path = config["PATH_TO_TEST_SEQ_ONEHOT"]
+        coord_path = config["PATH_TO_COORD_EMBEDDED"]
+    else:
+        raise RuntimeError('Unknown embedding')
+    seq, _ = get_sequence_data(seq_path, coord_path)
+    return seq
+
+
+def get_embedded_data_coordinates(config, embedding=Embedding.PSE):
+    if embedding == Embedding.PSE:
+        seq_path = config["PATH_TO_SEQ_EMBEDDED"]
+        coord_path = config["PATH_TO_COORD_EMBEDDED"]
+    elif embedding == Embedding.ONEHOT:
+        seq_path = config["PATH_TO_SEQ_ONEHOT"]
+        coord_path = config["PATH_TO_COORD_EMBEDDED"]
+    else:
+        raise RuntimeError('Unknown embedding')
+    seq, coordinates = get_sequence_data(seq_path, coord_path)
     return seq, coordinates

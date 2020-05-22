@@ -37,7 +37,7 @@ def distance_between_atoms(loop):
 
 
 def angles_between_atoms(loop, lengths, on_cpu=False):
-    loop = loop.reshape(loop.shape[0], -1, 3) if on_cpu else loop.view(loop.shape[0], -1, 3)
+    loop = loop.reshape(loop.shape[0], -1, 3)
     a = loop[:, :-2]
     b = loop[:, 1:-1]
     c = loop[:, 2:]
@@ -63,8 +63,8 @@ def rmsd(pred, test, lengths):
 
 def coordinate_metrics(pred, test, lengths, on_cpu=False):
     metrics = {}
-    pred = pred.reshape(pred.shape[0], -1, 3) if on_cpu else pred.view(pred.shape[0], -1, 3)
-    test = test.reshape(pred.shape[0], -1, 3) if on_cpu else test.view(pred.shape[0], -1, 3)
+    pred = pred.reshape(pred.shape[0], -1, 3)
+    test = test.reshape(pred.shape[0], -1, 3)
 
     mae_batch = (pred - test).norm(dim=-1).mean(-1)
     rmsd_batch = rmsd(pred, test, lengths)

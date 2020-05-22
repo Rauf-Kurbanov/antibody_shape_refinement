@@ -8,7 +8,9 @@ import wandb
 import models.simple_architecture.data_utils as data_utils
 import models.simple_architecture.train_utils as train_utils
 from config_loader import load_config
-from models.simple_architecture.model import SimpleRNN, SimpleCharRNNUnit, SimpleCNN, SimpleCharRNN
+from models.simple_architecture.model import SimpleRNN, SimpleCharRNNUnit, SimpleCNN, SimpleCharRNN, SimpleRNNSphere, \
+    PSEModel
+from models.simple_architecture.data_utils import Embedding
 from metrics.metric import distance_between_atoms, angles_between_atoms
 
 MODEL_NAME = 'simple-coordinates'
@@ -21,7 +23,7 @@ class DistanceLoss(nn.Module):
         self.on_cpu = on_cpu
 
     def reshape_loop(self, loop):
-        return loop.reshape(loop.shape[0], -1, 3) if self.on_cpu else loop.view(loop.shape[0], -1, 3)
+        return loop.reshape(loop.shape[0], -1, 3)
 
     def forward(self, pred, target):
         pred = self.reshape_loop(pred)
@@ -56,7 +58,8 @@ class ComplexLoss(nn.Module):
         mse_loss = self.mse_loss_function(pred, target)
         distance_loss = self.distance_loss_function(pred, target)
         angles_loss = self.angles_loss_function(pred, target, lengths)
-        z = mse_loss + distance_loss + angles_loss
+        z = mse_loss + angles_loss
+        # z = mse_loss + distance_loss  # + angles_loss
         # todo add distance between ends loss
         return z
 
@@ -83,7 +86,7 @@ def parse_parameters(args):
     }
 
 
-def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
+def simplemodel_coord_train(logger, args, use_backup=False, debug=False, embedding=Embedding.PSE):
     params = parse_parameters(args)
     save_prefix = args['save_prefix']
     config = load_config()
@@ -91,16 +94,26 @@ def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
     if not torch.cuda.is_available():
         logger.error("Cuda is unavailable")
 
-    seq, coord = data_utils.get_embedded_data_coordinates(config)
-    train_data, test_data = data_utils.get_dataset_coordinates(seq, coord, config, test_size=params['test_size'])
-    train_dataloader, val_dataloader = data_utils.get_dataloaders(train_data, test_data, params['batch_size'])
+    seq, coord = data_utils.get_embedded_data_coordinates(config, embedding=embedding)
+    seq_test = data_utils.get_embedded_test_data_coordinates(config, embedding=embedding)
+    test_data = data_utils.get_test_dataset_coordinates(seq_test, coord)
+    train_data, val_data = data_utils.get_dataset_coordinates(seq, coord, config, test_size=params['test_size'])
+    # test_dataloader = data_utils.get_test_dataloader(test_data, params['batch_size'])
+    test_dataloader = None
+    train_dataloader, val_dataloader = data_utils.get_dataloaders(train_data, val_data, params['batch_size'])
 
-    # model = SimpleCNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'], device)
+    # model = SimpleCNN(params['input_size'], params['output_size'], hidden_dim=128, n_layers=3, device=device,
+    #                   kernel_size=3)
+    # model = SimpleRNNSphere(params['input_size'], 12, params['hidden_dim'], params['n_layers'],
+    #                         device)
+    # model = SimpleCNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'],
+    #                   kernel_size=3, device=device)
     model = SimpleCharRNN(params['input_size'], params['output_size'], params['hidden_dim'], params['n_layers'], device,
                           bilstm=True)
+    # model = PSEModel(model, config["PATH_TO_PRETRAINED_EMBEDDING_MODEL"])
     start_epoch, model = train_utils.try_load_model_backup(model, MODEL_NAME, use_backup, logger, config)
     model.to(device)
-    model.use_corrector(True)
+    # model.use_corrector(True)
 
     if not debug:
         train_utils.initialize_wandb(model, config, params['n_layers'], params['batch_size'],
@@ -114,7 +127,8 @@ def simplemodel_coord_train(logger, args, use_backup=False, debug=False):
     # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.002, step_size_up=100,
     #                                               cycle_momentum=False)
 
-    train_utils.train_model(train_dataloader, val_dataloader, model, MODEL_NAME, loss, optimizer, params['epochs'],
+    train_utils.train_model(train_dataloader, val_dataloader, test_dataloader, model, MODEL_NAME, loss, optimizer,
+                            params['epochs'],
                             logger,
                             device,
                             config,
