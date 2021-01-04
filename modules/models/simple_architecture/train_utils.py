@@ -4,10 +4,25 @@ import torch
 import torch.nn.utils.rnn as rnn_utils
 import wandb
 from tqdm import tqdm
-from metrics.metric import angle_metrics, coordinate_metrics
+from metrics.metric import angle_metrics, coordinate_metrics, rmsd
 
 
-def train_model(train_dataloader, val_dataloader, model, model_name, loss, optimizer, num_epochs, logger,
+def get_rmsd(preds, targets, lengths):
+    preds = preds.reshape(preds.shape[0], -1, 3)
+    targets = targets.reshape(preds.shape[0], -1, 3)
+    rmsd_batch = rmsd(preds, targets, lengths)
+    return rmsd_batch.sum()
+
+
+def get_mae(preds, targets, lengths):
+    preds = preds.reshape(preds.shape[0], -1, 3)
+    targets = targets.reshape(preds.shape[0], -1, 3)
+    mae_batch = (preds - targets).norm(dim=-1).mean(-1)
+    return mae_batch.sum()
+
+
+def train_model(train_dataloader, val_dataloader, test_dataloader, model, model_name, loss, optimizer, num_epochs,
+                logger,
                 device,
                 config,
                 metrics_logger,
@@ -16,17 +31,26 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
     for epoch in range(start_epoch, num_epochs):
         logger.info(f'Epoch {epoch}/{num_epochs - 1}')
 
-        for phase in ['train', 'val']:
+        for phase in ['train', 'val', 'test']:
             if phase == 'train':
                 dataloader = train_dataloader
                 if scheduler is not None:
                     scheduler.step()
                 model.train()
-            else:
+            elif phase == 'val':
                 dataloader = val_dataloader
+                model.eval()
+            else:
+                if epoch % 10 != 0 or test_dataloader is None:
+                    continue
+                dataloader = test_dataloader
                 model.eval()
 
             running_loss = 0.
+
+            rmsd = 0
+            mae = 0
+            num_points = len(dataloader.dataset)
 
             for inputs, targets, lengths in tqdm(dataloader):
                 inputs = inputs.to(device)
@@ -43,20 +67,43 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
 
                     loss_value = loss(preds, targets, lengths)
 
+                    rmsd += get_rmsd(preds, targets, lengths) / num_points
+                    mae += get_mae(preds, targets, lengths) / num_points
+
                     if phase == 'train':
 
                         loss_value.backward()
                         optimizer.step()
-
+                        # if epoch % 10 == 0:
+                        if debug:
+                            metrics_logger(preds, targets, lengths, logger, on_cpu=True, phase=phase)
+                        else:
+                            metrics_logger(preds, targets, lengths, wandb, on_cpu=False, phase=phase)
+                    elif phase == 'val':
+                        # if epoch % 10 == 0:
+                        if debug:
+                            metrics_logger(preds, targets, lengths, logger, on_cpu=True, phase=phase)
+                        else:
+                            metrics_logger(preds, targets, lengths, wandb, on_cpu=False, phase=phase)
                     else:
-                        if epoch % 10 == 0:
-                            if debug:
-                                metrics_logger(preds, targets, lengths, logger, on_cpu=True)
-                            else:
-                                metrics_logger(preds, targets, lengths, wandb, on_cpu=False)
+                        if debug:
+                            metrics_logger(preds, targets, lengths, logger, on_cpu=True, phase=phase)
+                        else:
+                            metrics_logger(preds, targets, lengths, wandb, on_cpu=False, phase=phase)
 
                 # statistics
                 running_loss += loss_value.item()
+
+            if not debug:
+                if phase == 'train':
+                    wandb.log({f"MAE epoch train": mae})
+                    wandb.log({f"RMSD epoch train": rmsd})
+                elif phase == 'val':
+                    wandb.log({f"MAE epoch": mae})
+                    wandb.log({f"RMSD epoch": rmsd})
+                else:
+                    wandb.log({f"MAE epoch test": mae})
+                    wandb.log({f"RMSD epoch test": rmsd})
 
             epoch_loss = running_loss / len(dataloader)
 
@@ -65,6 +112,9 @@ def train_model(train_dataloader, val_dataloader, model, model_name, loss, optim
                 if not debug:
                     wandb.log({"Train loss": epoch_loss})
                 print(epoch_loss)
+            elif phase == 'val':
+                if not debug:
+                    wandb.log({"Val loss": epoch_loss})
             else:
                 if not debug:
                     wandb.log({"Test loss": epoch_loss})
@@ -118,31 +168,36 @@ def try_load_unfinished_model(logger, config, model):
         logger.exception(f'Error loading unfinished {model}')
 
 
-def coordinates_metrics_logger(preds, targets, lengths, logger, on_cpu=False):
+def coordinates_metrics_logger(preds, targets, lengths, logger, on_cpu=False, phase='val'):
     metrics = coordinate_metrics(preds, targets, lengths, on_cpu)
+    train_tag = ''
+    if phase == 'train':
+        train_tag = ' train'
+    elif phase == 'test':
+        train_tag = ' test'
 
     if on_cpu:
-        logger.info(f"MAE batch: {metrics['mae']}")
-        logger.info(f"Min MAE batch: {metrics['mae_min']}")
-        logger.info(f"Max MAE batch: {metrics['mae_max']}")
-        logger.info(f"Median MAE batch: {metrics['mae_median']}")
-        logger.info(f"RMSD batch: {metrics['rmsd']}")
-        logger.info(f"Min RMSD batch: {metrics['rmsd_min']}")
-        logger.info(f"Max RMSD batch: {metrics['rmsd_max']}")
-        logger.info(f"Median RMSD batch: {metrics['rmsd_median']}")
-        logger.info(f"Distance deviation between neighbours: {metrics['diff_neighbours_dist']}")
-        logger.info(f"Angles deviation: {metrics['diff_angles']}")
+        logger.info(f"MAE batch{train_tag}: {metrics['mae']}")
+        logger.info(f"Min MAE batch{train_tag}: {metrics['mae_min']}")
+        logger.info(f"Max MAE batch{train_tag}: {metrics['mae_max']}")
+        logger.info(f"Median MAE batch{train_tag}: {metrics['mae_median']}")
+        logger.info(f"RMSD batch{train_tag}: {metrics['rmsd']}")
+        logger.info(f"Min RMSD batch{train_tag}: {metrics['rmsd_min']}")
+        logger.info(f"Max RMSD batch{train_tag}: {metrics['rmsd_max']}")
+        logger.info(f"Median RMSD batch{train_tag}: {metrics['rmsd_median']}")
+        logger.info(f"Distance deviation between neighbours{train_tag}: {metrics['diff_neighbours_dist']}")
+        logger.info(f"Angles deviation{train_tag}: {metrics['diff_angles']}")
     else:
-        logger.log({"MAE batch": metrics['mae']})
-        logger.log({"Min MAE batch": metrics['mae_min']})
-        logger.log({"Max MAE batch": metrics['mae_max']})
-        logger.log({"Median MAE batch": metrics['mae_median']})
-        logger.log({"RMSD batch": metrics['rmsd']})
-        logger.log({"Min RMSD batch": metrics['rmsd_min']})
-        logger.log({"Max RMSD batch": metrics['rmsd_max']})
-        logger.log({"Median RMSD batch": metrics['rmsd_median']})
-        logger.log({"Distance deviation between neighbours": metrics['diff_neighbours_dist']})
-        logger.log({"Angles deviation": metrics['diff_angles']})
+        logger.log({f"MAE batch{train_tag}": metrics['mae']})
+        logger.log({f"Min MAE batch{train_tag}": metrics['mae_min']})
+        logger.log({f"Max MAE batch{train_tag}": metrics['mae_max']})
+        logger.log({f"Median MAE batch{train_tag}": metrics['mae_median']})
+        logger.log({f"RMSD batch{train_tag}": metrics['rmsd']})
+        logger.log({f"Min RMSD batch{train_tag}": metrics['rmsd_min']})
+        logger.log({f"Max RMSD batch{train_tag}": metrics['rmsd_max']})
+        logger.log({f"Median RMSD batch{train_tag}": metrics['rmsd_median']})
+        logger.log({f"Distance deviation between neighbours{train_tag}": metrics['diff_neighbours_dist']})
+        logger.log({f"Angles deviation{train_tag}": metrics['diff_angles']})
 
 
 def angles_metrics_logger(preds, targets, lengths, logger):
